@@ -1,0 +1,16 @@
+[project]
+name = "dashwidgets-pyqt"
+version = "0.1.0"
+description = "Windows桌面小组件管理器 - PyQt版本"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.6.0",
+    "PyQt6-Fluent-Widgets>=1.6.0",
+    "PyQt6-WebEngine>=6.6.0",
+    "loguru>=0.7.3",
+    "psutil>=5.9.0",
+]
+
+[project.scripts]
+dashwidgets = "main:main"
