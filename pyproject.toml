@@ -10,6 +10,7 @@ dependencies = [
     "PyQt6-WebEngine>=6.6.0",
     "loguru>=0.7.3",
     "psutil>=5.9.0",
+    "pycaw>=20181226",
 ]
 
 [project.scripts]
