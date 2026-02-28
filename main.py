@@ -9,16 +9,17 @@ PyQt版本
 import sys
 import json
 import ctypes
+import urllib.parse
 from pathlib import Path
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional, Any
 
 from loguru import logger
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QSystemTrayIcon, QMenu,
     QListWidget, QListWidgetItem, QProgressBar, QTextEdit, QGridLayout,
-    QSlider, QCheckBox, QDialog, QFileDialog, QLineEdit
+    QSlider, QCheckBox, QDialog, QFileDialog, QLineEdit, QComboBox, QSpinBox
 )
 from PyQt6.QtCore import (
     Qt, QTimer, QRect, QPoint, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty,
@@ -75,11 +76,36 @@ logger.add(
 
 class ThemeColors:
     """主题颜色配置 - Windows 11 风格"""
-    def __init__(self, light_mode: bool = True):
+    # 配色方案
+    COLOR_SCHEMES = {
+        "blue": {
+            "accent": "#0078D4", "accent_hover": "#106EBE", "accent_pressed": "#005A9E", "accent_light": "#60CDFF"
+        },
+        "green": {
+            "accent": "#107C10", "accent_hover": "#0B5C0B", "accent_pressed": "#084008", "accent_light": "#6BBF6B"
+        },
+        "purple": {
+            "accent": "#8764B8", "accent_hover": "#6D4F96", "accent_pressed": "#533A74", "accent_light": "#B8A4D4"
+        },
+        "orange": {
+            "accent": "#FF8C00", "accent_hover": "#E67E00", "accent_pressed": "#CC7000", "accent_light": "#FFB84D"
+        },
+        "red": {
+            "accent": "#D13438", "accent_hover": "#A82828", "accent_pressed": "#7E1E1E", "accent_light": "#E87A7A"
+        },
+        "teal": {
+            "accent": "#00B7C3", "accent_hover": "#00909A", "accent_pressed": "#006D73", "accent_light": "#66D9E0"
+        }
+    }
+
+    def __init__(self, light_mode: bool = True, color_scheme: str = "blue"):
         self.light_mode = light_mode
+        self.color_scheme = color_scheme
         self._update_colors()
 
     def _update_colors(self):
+        scheme = self.COLOR_SCHEMES.get(self.color_scheme, self.COLOR_SCHEMES["blue"])
+
         if self.light_mode:
             # 浅色主题 - Windows 11 风格
             self.bg_main = "#F3F3F3"           # 页面背景
@@ -92,9 +118,10 @@ class ThemeColors:
             self.text_primary = "#1A1A1A"      # 主要文字
             self.text_secondary = "#5C5C5C"    # 次要文字
             self.text_tertiary = "#8A8A8A"     # 三级文字
-            self.accent = "#0078D4"            # 系统强调色
-            self.accent_light = "#60CDFF"      # 浅色强调
-            self.accent_hover = "#106EBE"      # 强调色悬停
+            self.accent = scheme["accent"]
+            self.accent_light = scheme["accent_light"]
+            self.accent_hover = scheme["accent_hover"]
+            self.accent_pressed = scheme["accent_pressed"]
             self.border = "#E5E5E5"            # 边框
             self.subtle = "#0000000F"          # 微妙背景
             self.success = "#0F7B0F"           # 成功
@@ -113,9 +140,10 @@ class ThemeColors:
             self.text_primary = "#FFFFFF"      # 主要文字
             self.text_secondary = "#C5C5C5"    # 次要文字
             self.text_tertiary = "#8A8A8A"     # 三级文字
-            self.accent = "#60CDFF"            # 系统强调色
-            self.accent_light = "#60CDFF"      # 浅色强调
-            self.accent_hover = "#7CE0FF"      # 强调色悬停
+            self.accent = scheme["accent_light"]
+            self.accent_light = scheme["accent_light"]
+            self.accent_hover = scheme["accent"]
+            self.accent_pressed = scheme["accent_hover"]
             self.border = "#3D3D3D"            # 边框
             self.subtle = "#FFFFFF0F"          # 微妙背景
             self.success = "#6CCB6C"           # 成功
@@ -136,6 +164,7 @@ class WidgetConfig:
         self.widget_opacity: float = 0.95
         self.snap_enabled: bool = True
         self.snap_threshold: int = 20
+        self.color_scheme: str = "blue"
         self.load()
 
     def load(self):
@@ -147,6 +176,7 @@ class WidgetConfig:
                 self.widget_opacity = data.get("widget_opacity", 0.95)
                 self.snap_enabled = data.get("snap_enabled", True)
                 self.snap_threshold = data.get("snap_threshold", 20)
+                self.color_scheme = data.get("color_scheme", "blue")
             except Exception as e:
                 logger.error(f"加载配置失败: {e}")
 
@@ -157,7 +187,8 @@ class WidgetConfig:
                 "light_mode": self.light_mode,
                 "widget_opacity": self.widget_opacity,
                 "snap_enabled": self.snap_enabled,
-                "snap_threshold": self.snap_threshold
+                "snap_threshold": self.snap_threshold,
+                "color_scheme": self.color_scheme
             }
             CONFIG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as e:
@@ -358,6 +389,7 @@ class BaseWidget(QFrame):
         self._snap_indicator_rect = None
         self._snap_indicator_type = None  # 'left', 'right', 'top', 'bottom'
         self.click_through = False  # 鼠标穿透模式
+        self.always_on_top = False  # 默认不置顶，只显示在桌面
 
         # 拖拽调整大小相关
         self._resizing = False
@@ -372,6 +404,9 @@ class BaseWidget(QFrame):
         self._setup_ui()
         self._setup_animations()
 
+        # 加载置顶配置
+        self._load_top_state()
+
         # 定时器
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_content)
@@ -385,15 +420,61 @@ class BaseWidget(QFrame):
         self._content_width = w
         self._content_height = h
 
+        # 默认不置顶，只显示在桌面层
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         # 窗口大小增加阴影边距
         self.setFixedSize(w + self.SHADOW_MARGIN * 2, h + self.SHADOW_MARGIN * 2)
+
+    def _load_top_state(self):
+        """加载置顶状态配置"""
+        for widget_config in config.widgets:
+            if widget_config.get("id") == self.widget_id:
+                self.always_on_top = widget_config.get("always_on_top", False)
+                break
+
+        # 应用置顶状态
+        self._apply_top_state()
+
+    def _apply_top_state(self):
+        """应用置顶状态"""
+        if self.always_on_top:
+            # 设置置顶窗口标志
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Tool
+            )
+        else:
+            # 普通窗口标志
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.Tool
+            )
+        self.show()
+
+        hwnd = int(self.winId())
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+
+        if self.always_on_top:
+            HWND_TOPMOST = -1
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, HWND_TOPMOST,
+                0, 0, 0, 0,
+                SWP_NOSIZE | SWP_NOMOVE
+            )
+        else:
+            HWND_NOTOPMOST = -2
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, HWND_NOTOPMOST,
+                0, 0, 0, 0,
+                SWP_NOSIZE | SWP_NOMOVE
+            )
 
     def _is_on_resize_handle(self, pos):
         """检查鼠标是否在调整大小手柄区域"""
@@ -433,10 +514,10 @@ class BaseWidget(QFrame):
 
     def _setup_ui(self):
         """设置UI（子类实现）"""
-        self.layout = QVBoxLayout(self)
+        self._main_layout = QVBoxLayout(self)
         # 布局边距需要包含阴影边距
         m = self.SHADOW_MARGIN
-        self.layout.setContentsMargins(m + 12, m + 12, m + 12, m + 12)
+        self._main_layout.setContentsMargins(m + 12, m + 12, m + 12, m + 12)
 
         # 标题栏
         self.header = QHBoxLayout()
@@ -468,7 +549,7 @@ class BaseWidget(QFrame):
         self.close_btn.clicked.connect(self._on_close)
         self.header.addWidget(self.close_btn)
 
-        self.layout.addLayout(self.header)
+        self._main_layout.addLayout(self.header)
 
     def _setup_animations(self):
         """设置动画"""
@@ -521,6 +602,18 @@ class BaseWidget(QFrame):
         # 从全局列表中移除
         if self in BaseWidget._all_widgets:
             BaseWidget._all_widgets.remove(self)
+
+        # 淡出动画后关闭
+        self.close_animation = QPropertyAnimation(self, b"windowOpacity")
+        self.close_animation.setDuration(150)
+        self.close_animation.setStartValue(self.windowOpacity())
+        self.close_animation.setEndValue(0)
+        self.close_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.close_animation.finished.connect(lambda: self._finish_close())
+        self.close_animation.start()
+
+    def _finish_close(self):
+        """完成关闭"""
         self.closed.emit(self.widget_id)
         self.close()
 
@@ -811,13 +904,70 @@ class BaseWidget(QFrame):
         menu.exec(event.globalPos())
 
     def _bring_to_top(self):
-        """置顶显示"""
-        self.raise_()
-        self.activateWindow()
+        """置顶显示 - 使用Windows API实现持久置顶"""
+        self.always_on_top = True
+
+        # 更新窗口标志，添加置顶属性
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
+        )
+        self.show()
+
+        hwnd = int(self.winId())
+
+        # 设置窗口为始终置顶
+        HWND_TOPMOST = -1
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+
+        ctypes.windll.user32.SetWindowPos(
+            hwnd, HWND_TOPMOST,
+            0, 0, 0, 0,
+            SWP_NOSIZE | SWP_NOMOVE
+        )
+
+        # 保存配置
+        for widget_config in config.widgets:
+            if widget_config.get("id") == self.widget_id:
+                widget_config["always_on_top"] = True
+                break
+        config.save()
 
     def _send_to_bottom(self):
-        """置底显示"""
+        """置底显示 - 取消置顶并移到底层"""
+        self.always_on_top = False
+
+        # 更新窗口标志，移除置顶属性
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool
+        )
+        self.show()
+
+        hwnd = int(self.winId())
+
+        # 取消置顶
+        HWND_NOTOPMOST = -2
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+
+        ctypes.windll.user32.SetWindowPos(
+            hwnd, HWND_NOTOPMOST,
+            0, 0, 0, 0,
+            SWP_NOSIZE | SWP_NOMOVE
+        )
+
+        # 移到最底层
         self.lower()
+
+        # 保存配置
+        for widget_config in config.widgets:
+            if widget_config.get("id") == self.widget_id:
+                widget_config["always_on_top"] = False
+                break
+        config.save()
 
     def _toggle_click_through(self):
         """切换鼠标穿透模式 - 使用Windows API"""
@@ -855,12 +1005,13 @@ class ClockWidget(BaseWidget):
     """时钟小组件"""
     # 尺寸对应的字体大小
     FONT_SIZES = {
-        "small": 32,
-        "medium": 48,
-        "large": 64
+        "small": 28,
+        "medium": 42,
+        "large": 56
     }
 
     def __init__(self, widget_id: str, size: str = "medium"):
+        self.show_seconds = False  # 默认关闭秒数显示
         super().__init__(widget_id, "时钟", size)
 
     def _setup_ui(self):
@@ -870,26 +1021,37 @@ class ClockWidget(BaseWidget):
         self.time_label = QLabel()
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # 秒数显示
+        self.seconds_label = QLabel()
+        self.seconds_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         # 日期显示
         self.date_label = QLabel()
         self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._apply_styles()
 
-        self.layout.addStretch()
-        self.layout.addWidget(self.time_label)
-        self.layout.addWidget(self.date_label)
-        self.layout.addStretch()
+        self._main_layout.addStretch()
+        self._main_layout.addWidget(self.time_label)
+        self._main_layout.addWidget(self.seconds_label)
+        self._main_layout.addSpacing(4)
+        self._main_layout.addWidget(self.date_label)
+        self._main_layout.addStretch()
 
     def _apply_styles(self):
-        font_size = self.FONT_SIZES.get(self.size_key, 48)
+        font_size = self.FONT_SIZES.get(self.size_key, 42)
         self.time_label.setStyleSheet(f"""
             font-size: {font_size}px;
             font-weight: 300;
             color: {theme.text_primary};
         """)
+        self.seconds_label.setStyleSheet(f"""
+            font-size: {font_size // 2}px;
+            font-weight: 300;
+            color: {theme.accent};
+        """)
         self.date_label.setStyleSheet(f"""
-            font-size: 14px;
+            font-size: 13px;
             color: {theme.text_secondary};
         """)
 
@@ -903,8 +1065,72 @@ class ClockWidget(BaseWidget):
 
     def update_content(self):
         now = datetime.now()
-        self.time_label.setText(now.strftime("%H:%M"))
+        if self.show_seconds:
+            self.time_label.setText(now.strftime("%H:%M"))
+            self.seconds_label.setText(f":{now.strftime('%S')}")
+            self.seconds_label.show()
+        else:
+            self.time_label.setText(now.strftime("%H:%M:%S"))
+            self.seconds_label.hide()
         self.date_label.setText(now.strftime("%Y年%m月%d日 %A"))
+
+    def contextMenuEvent(self, event):
+        """右键菜单"""
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {theme.bg_card};
+                border: 1px solid {theme.border};
+                border-radius: 8px;
+                padding: 6px 4px;
+                font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+                font-size: 13px;
+            }}
+            QMenu::item {{
+                padding: 8px 28px 8px 16px;
+                border-radius: 4px;
+                background: transparent;
+                color: {theme.text_primary};
+                margin: 1px 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {theme.bg_hover};
+            }}
+        """)
+
+        # 秒数显示选项
+        seconds_action = menu.addAction("显示秒数")
+        seconds_action.setCheckable(True)
+        seconds_action.setChecked(self.show_seconds)
+        seconds_action.triggered.connect(self._toggle_seconds)
+
+        menu.addSeparator()
+
+        # 窗口层级选项
+        top_action = menu.addAction("置顶显示")
+        top_action.triggered.connect(self._bring_to_top)
+
+        bottom_action = menu.addAction("置底显示")
+        bottom_action.triggered.connect(self._send_to_bottom)
+
+        menu.addSeparator()
+
+        # 鼠标穿透选项
+        click_through_action = menu.addAction("鼠标穿透")
+        click_through_action.setCheckable(True)
+        click_through_action.setChecked(self.click_through)
+        click_through_action.triggered.connect(self._toggle_click_through)
+
+        menu.addSeparator()
+        close_action = menu.addAction("关闭小组件")
+        close_action.triggered.connect(self._on_close)
+
+        menu.exec(event.globalPos())
+
+    def _toggle_seconds(self):
+        """切换秒数显示"""
+        self.show_seconds = not self.show_seconds
+        self.update_content()
 
 
 class SystemMonitorWidget(BaseWidget):
@@ -932,12 +1158,12 @@ class SystemMonitorWidget(BaseWidget):
         self.mem_bar.setMaximumHeight(8)
         self.mem_bar.setTextVisible(False)
 
-        self.layout.addWidget(self.cpu_label)
-        self.layout.addWidget(self.cpu_bar)
-        self.layout.addSpacing(8)
-        self.layout.addWidget(self.mem_label)
-        self.layout.addWidget(self.mem_bar)
-        self.layout.addStretch()
+        self._main_layout.addWidget(self.cpu_label)
+        self._main_layout.addWidget(self.cpu_bar)
+        self._main_layout.addSpacing(8)
+        self._main_layout.addWidget(self.mem_label)
+        self._main_layout.addWidget(self.mem_bar)
+        self._main_layout.addStretch()
 
     def _apply_progress_style(self):
         """应用进度条样式"""
@@ -1008,11 +1234,11 @@ class TimerWidget(BaseWidget):
         btn_layout.addWidget(self.start_btn, 1)
         btn_layout.addWidget(self.reset_btn, 1)
 
-        self.layout.addStretch()
-        self.layout.addWidget(self.display)
-        self.layout.addSpacing(12)
-        self.layout.addLayout(btn_layout)
-        self.layout.addStretch()
+        self._main_layout.addStretch()
+        self._main_layout.addWidget(self.display)
+        self._main_layout.addSpacing(12)
+        self._main_layout.addLayout(btn_layout)
+        self._main_layout.addStretch()
 
         self._apply_styles()
 
@@ -1085,7 +1311,7 @@ class NotesWidget(BaseWidget):
         self._apply_style()
         self.text_edit.textChanged.connect(self._save_note)
 
-        self.layout.addWidget(self.text_edit)
+        self._main_layout.addWidget(self.text_edit)
 
     def _apply_style(self):
         """应用样式"""
@@ -1378,17 +1604,1013 @@ class CropPreviewWidget(QFrame):
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
 
+class MusicWidget(BaseWidget):
+    """音乐控制小组件 - 控制系统媒体播放"""
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.current_app = ""
+        self.track_title = ""
+        self.track_artist = ""
+        self.is_playing = False
+        super().__init__(widget_id, "音乐", size)
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 应用信息显示
+        self.app_label = QLabel("无媒体播放")
+        self.app_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 11px;
+            background: transparent;
+        """)
+        self.app_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # 歌曲信息
+        self.track_label = QLabel("")
+        self.track_label.setStyleSheet(f"""
+            color: {theme.text_primary};
+            font-size: 13px;
+            font-weight: 500;
+            background: transparent;
+        """)
+        self.track_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.track_label.setWordWrap(True)
+
+        # 艺术家信息
+        self.artist_label = QLabel("")
+        self.artist_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 12px;
+            background: transparent;
+        """)
+        self.artist_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # 控制按钮容器
+        controls = QHBoxLayout()
+        controls.setSpacing(12)
+
+        # 上一首按钮
+        self.prev_btn = QPushButton("⏮")
+        self.prev_btn.setFixedSize(40, 32)
+        self.prev_btn.clicked.connect(self._prev_track)
+        self.prev_btn.setToolTip("上一首")
+        controls.addStretch()
+        controls.addWidget(self.prev_btn)
+
+        # 播放/暂停按钮
+        self.play_btn = QPushButton("▶")
+        self.play_btn.setFixedSize(48, 32)
+        self.play_btn.clicked.connect(self._toggle_play)
+        self.play_btn.setToolTip("播放/暂停")
+        controls.addWidget(self.play_btn)
+
+        # 下一首按钮
+        self.next_btn = QPushButton("⏭")
+        self.next_btn.setFixedSize(40, 32)
+        self.next_btn.clicked.connect(self._next_track)
+        self.next_btn.setToolTip("下一首")
+        controls.addWidget(self.next_btn)
+        controls.addStretch()
+
+        # 添加到布局
+        self._main_layout.addWidget(self.app_label)
+        self._main_layout.addSpacing(4)
+        self._main_layout.addWidget(self.track_label)
+        self._main_layout.addWidget(self.artist_label)
+        self._main_layout.addSpacing(10)
+        self._main_layout.addLayout(controls)
+        self._main_layout.addStretch()
+
+        # 应用按钮样式
+        self._style_button(self.prev_btn)
+        self._style_button(self.play_btn, primary=True)
+        self._style_button(self.next_btn)
+
+        # 定时器获取媒体信息
+        self.media_timer = QTimer(self)
+        self.media_timer.timeout.connect(self._update_media_info)
+        self.media_timer.start(1000)  # 每秒更新
+
+    def _style_button(self, btn, primary=False):
+        """设置按钮样式 - 优雅简约风格"""
+        if primary:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {theme.bg_hover};
+                    color: {theme.text_primary};
+                    border: 1px solid {theme.border};
+                    border-radius: 20px;
+                    font-size: 14px;
+                    padding: 8px;
+                }}
+                QPushButton:hover {{
+                    background: {theme.bg_pressed};
+                    border-color: {theme.text_tertiary};
+                }}
+                QPushButton:pressed {{
+                    background: {theme.bg_card};
+                }}
+            """)
+        else:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    color: {theme.text_secondary};
+                    border: 1px solid {theme.border};
+                    border-radius: 20px;
+                    font-size: 14px;
+                    padding: 8px;
+                }}
+                QPushButton:hover {{
+                    background: {theme.bg_hover};
+                    color: {theme.text_primary};
+                }}
+                QPushButton:pressed {{
+                    background: {theme.bg_pressed};
+                }}
+            """)
+
+    def _send_media_key(self, key_code):
+        """发送媒体键 - 使用 keybd_event"""
+        import ctypes
+
+        KEYEVENTF_EXTENDEDKEY = 0x0001
+        KEYEVENTF_KEYUP = 0x0002
+
+        # 发送按键按下
+        ctypes.windll.user32.keybd_event(key_code, 0, KEYEVENTF_EXTENDEDKEY, 0)
+        # 发送按键释放
+        ctypes.windll.user32.keybd_event(key_code, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+
+    def _toggle_play(self):
+        """播放/暂停"""
+        VK_MEDIA_PLAY_PAUSE = 0xB3
+        self._send_media_key(VK_MEDIA_PLAY_PAUSE)
+        # 切换播放状态并更新按钮图标
+        self.is_playing = not self.is_playing
+        self._update_play_button()
+
+    def _update_play_button(self):
+        """更新播放按钮图标"""
+        if self.is_playing:
+            self.play_btn.setText("⏸")
+            self.play_btn.setToolTip("暂停")
+        else:
+            self.play_btn.setText("▶")
+            self.play_btn.setToolTip("播放")
+
+    def _prev_track(self):
+        """上一首"""
+        VK_MEDIA_PREV_TRACK = 0xB1
+        self._send_media_key(VK_MEDIA_PREV_TRACK)
+
+    def _next_track(self):
+        """下一首"""
+        VK_MEDIA_NEXT_TRACK = 0xB0
+        self._send_media_key(VK_MEDIA_NEXT_TRACK)
+
+    def _update_media_info(self):
+        """更新媒体信息"""
+        try:
+            # 尝试获取当前播放的媒体信息
+            from pycaw.pycaw import AudioUtilities
+            sessions = AudioUtilities.GetAllSessions()
+
+            found_media = False
+            was_playing = self.is_playing
+            self.is_playing = False
+
+            for session in sessions:
+                if session.Process:
+                    process_name = session.Process.name()
+                    # 检查常见的媒体播放器
+                    media_players = [
+                        'Spotify.exe', 'Music.UI.exe', 'AIMP.exe', 'foobar2000.exe',
+                        'Winamp.exe', 'vlc.exe', 'MusicBee.exe', 'AppleMusic.exe',
+                        'YouTube Music.exe', 'NeteaseCloudMusic.exe', 'cloudmusic.exe',
+                        'QQMusic.exe', 'KuGou.exe', 'KwMusic.exe'
+                    ]
+                    if process_name in media_players or 'music' in process_name.lower():
+                        # 检查音频会话状态
+                        try:
+                            volume = session.SimpleAudioVolume
+                            if volume and volume.GetMasterVolume() > 0:
+                                # 获取音频会话状态
+                                state = session.State
+                                # State: 0 = Inactive, 1 = Active, 2 = Expired
+                                if state == 1:  # Active
+                                    self.is_playing = True
+                        except:
+                            self.is_playing = True  # 默认认为在播放
+
+                        app_name = process_name.replace('.exe', '')
+                        self.current_app = app_name
+                        self.app_label.setText(app_name)
+                        found_media = True
+                        break
+
+            if not found_media:
+                self.app_label.setText("无媒体播放")
+                self.track_label.setText("")
+                self.artist_label.setText("")
+                self.is_playing = False
+
+            # 更新按钮图标
+            if was_playing != self.is_playing:
+                self._update_play_button()
+
+        except Exception:
+            pass
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+        self._style_button(self.prev_btn)
+        self._style_button(self.play_btn, primary=True)
+        self._style_button(self.next_btn)
+
+    def update_content(self):
+        pass
+
+
+class WeatherWidget(BaseWidget):
+    """天气小组件 - 显示实时天气信息"""
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.weather_data = {}
+        self.location = "北京"
+        self._fetch_thread = None
+        super().__init__(widget_id, "天气", size)
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 天气图标和温度
+        header_layout = QHBoxLayout()
+
+        self.weather_icon = QLabel("N/A")
+        self.weather_icon.setStyleSheet(f"""
+            font-size: 14px;
+            font-weight: 500;
+            color: {theme.accent};
+            background: transparent;
+        """)
+        header_layout.addWidget(self.weather_icon)
+
+        self.temp_label = QLabel("--°")
+        self.temp_label.setStyleSheet(f"""
+            color: {theme.text_primary};
+            font-size: 28px;
+            font-weight: 300;
+            background: transparent;
+        """)
+        header_layout.addWidget(self.temp_label)
+        header_layout.addStretch()
+
+        self._main_layout.addLayout(header_layout)
+
+        # 天气描述
+        self.desc_label = QLabel("加载中...")
+        self.desc_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 13px;
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.desc_label)
+
+        # 位置
+        self.location_label = QLabel(self.location)
+        self.location_label.setStyleSheet(f"""
+            color: {theme.text_tertiary};
+            font-size: 11px;
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.location_label)
+
+        # 详细信息
+        details_layout = QHBoxLayout()
+        details_layout.setSpacing(16)
+
+        self.humidity_label = QLabel("湿度 --%")
+        self.humidity_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 11px;
+            background: transparent;
+        """)
+        details_layout.addWidget(self.humidity_label)
+
+        self.wind_label = QLabel("风速 --km/h")
+        self.wind_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 11px;
+            background: transparent;
+        """)
+        details_layout.addWidget(self.wind_label)
+
+        details_layout.addStretch()
+        self._main_layout.addLayout(details_layout)
+        self._main_layout.addStretch()
+
+        # 定时更新天气
+        self.weather_timer = QTimer(self)
+        self.weather_timer.timeout.connect(self._start_fetch)
+        self.weather_timer.start(300000)  # 每5分钟更新
+
+        # 初始获取（异步）
+        QTimer.singleShot(500, self._start_fetch)
+
+    def _start_fetch(self):
+        """异步获取天气数据"""
+        from threading import Thread
+
+        def fetch():
+            try:
+                import urllib.request
+                import json
+
+                url = f"https://wttr.in/{urllib.parse.quote(self.location)}?format=j1"
+                req = urllib.request.Request(url, headers={'User-Agent': 'curl'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+
+                current = data.get('current_condition', [{}])[0]
+                self.weather_data = {
+                    'temp': current.get('temp_C', '--'),
+                    'desc': current.get('weatherDesc', [{}])[0].get('value', '未知'),
+                    'humidity': current.get('humidity', '--'),
+                    'wind': current.get('windspeedKmph', '--'),
+                    'code': current.get('weatherCode', '113')
+                }
+
+                # 在主线程更新UI
+                QTimer.singleShot(0, self._update_display)
+            except Exception as e:
+                QTimer.singleShot(0, lambda: self.desc_label.setText("获取失败"))
+                logger.error(f"获取天气失败: {e}")
+
+        thread = Thread(target=fetch, daemon=True)
+        thread.start()
+
+    def _get_weather_text(self, code):
+        """根据天气代码获取文字描述"""
+        code = int(code) if str(code).isdigit() else 113
+        texts = {
+            113: "晴",
+            116: "多云",
+            119: "阴",
+            122: "阴",
+            143: "雾",
+            176: "小雨",
+            179: "小雪",
+            182: "雨夹雪",
+            185: "雨夹雪",
+            200: "雷雨",
+            227: "暴风雪",
+            230: "暴风雪",
+            248: "雾",
+            260: "雾",
+            263: "小雨",
+            266: "小雨",
+            281: "雨夹雪",
+            284: "雨夹雪",
+            293: "小雨",
+            296: "小雨",
+            299: "中雨",
+            302: "中雨",
+            305: "大雨",
+            308: "大雨",
+            311: "大雨",
+            314: "大雨",
+            317: "中雪",
+            320: "中雪",
+            323: "小雪",
+            326: "小雪",
+            329: "中雪",
+            332: "中雪",
+            335: "大雪",
+            338: "大雪",
+            350: "冰雹",
+            353: "中雨",
+            356: "大雨",
+            359: "暴雨",
+            362: "中雪",
+            365: "大雪",
+            368: "小雪",
+            371: "大雪",
+            374: "冰雹",
+            377: "冰雹",
+            386: "雷雨",
+            389: "雷雨",
+            392: "雷雪",
+            395: "雷雪",
+        }
+        return texts.get(code, "未知")
+
+    def _update_display(self):
+        """更新显示"""
+        data = self.weather_data
+        weather_text = self._get_weather_text(data.get('code', '113'))
+        self.weather_icon.setText(weather_text)
+        self.temp_label.setText(f"{data.get('temp', '--')}°")
+        self.desc_label.setText(data.get('desc', '未知'))
+        self.humidity_label.setText(f"湿度 {data.get('humidity', '--')}%")
+        self.wind_label.setText(f"风速 {data.get('wind', '--')}km/h")
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+
+    def update_content(self):
+        pass
+
+
+class TodoWidget(BaseWidget):
+    """待办清单小组件"""
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.todos = []
+        self._load_todos()
+        super().__init__(widget_id, "待办", size)
+
+    def _load_todos(self):
+        """从配置加载待办"""
+        for w in config.widgets:
+            if w.get("id") == self.widget_id:
+                self.todos = w.get("todos", [])
+                break
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 输入框
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("添加新任务...")
+        self.input.returnPressed.connect(self._add_todo)
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {theme.bg_input};
+                border: 1px solid {theme.border};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
+                color: {theme.text_primary};
+            }}
+            QLineEdit:focus {{
+                border-color: {theme.accent};
+            }}
+        """)
+        self._main_layout.addWidget(self.input)
+
+        # 待办列表
+        self.list_widget = QListWidget()
+        self.list_widget.itemClicked.connect(self._toggle_todo)
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background: transparent;
+                border: none;
+                font-size: 12px;
+            }}
+            QListWidget::item {{
+                padding: 6px;
+                border-bottom: 1px solid {theme.border};
+            }}
+            QListWidget::item:selected {{
+                background: {theme.bg_hover};
+            }}
+        """)
+        self._main_layout.addWidget(self.list_widget)
+        self._update_list()
+
+        # 清除已完成按钮
+        self.clear_btn = QPushButton("清除已完成")
+        self.clear_btn.clicked.connect(self._clear_completed)
+        self.clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {theme.text_secondary};
+                border: none;
+                font-size: 11px;
+                padding: 4px;
+            }}
+            QPushButton:hover {{
+                color: {theme.accent};
+            }}
+        """)
+        self._main_layout.addWidget(self.clear_btn)
+
+    def _add_todo(self):
+        """添加待办"""
+        text = self.input.text().strip()
+        if text:
+            self.todos.append({"text": text, "done": False})
+            self.input.clear()
+            self._update_list()
+            self._save_todos()
+
+    def _update_list(self):
+        """更新列表显示"""
+        self.list_widget.clear()
+        for i, todo in enumerate(self.todos):
+            item = QListWidgetItem(f"{'✓ ' if todo['done'] else '○ '}{todo['text']}")
+            if todo['done']:
+                item.setForeground(QColor(theme.text_tertiary))
+            self.list_widget.addItem(item)
+
+    def _toggle_todo(self, item):
+        """切换待办状态"""
+        idx = self.list_widget.row(item)
+        if 0 <= idx < len(self.todos):
+            self.todos[idx]['done'] = not self.todos[idx]['done']
+            self._update_list()
+            self._save_todos()
+
+    def _clear_completed(self):
+        """清除已完成"""
+        self.todos = [t for t in self.todos if not t['done']]
+        self._update_list()
+        self._save_todos()
+
+    def _save_todos(self):
+        """保存待办"""
+        # 保存到配置
+        for w in config.widgets:
+            if w.get("id") == self.widget_id:
+                w["todos"] = self.todos
+                break
+        config.save()
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+
+    def update_content(self):
+        pass
+
+
+class AlarmWidget(BaseWidget):
+    """倒计时小组件"""
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.target_time = None
+        self.remaining_seconds = 0
+        self.is_running = False
+        super().__init__(widget_id, "倒计时", size)
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 倒计时显示
+        self._main_layout.addStretch()
+        self.display = QLabel("00:00:00")
+        self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.display.setStyleSheet(f"""
+            font-size: 36px;
+            font-weight: 200;
+            color: {theme.text_primary};
+            background: transparent;
+            letter-spacing: 2px;
+        """)
+        self._main_layout.addWidget(self.display)
+        self._main_layout.addSpacing(12)
+
+        # 时间设置容器
+        time_container = QWidget()
+        time_layout = QHBoxLayout(time_container)
+        time_layout.setContentsMargins(0, 0, 0, 0)
+        time_layout.setSpacing(8)
+
+        self.hour_spin = QSpinBox()
+        self.hour_spin.setRange(0, 23)
+        self.hour_spin.setValue(0)
+        self.hour_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        time_layout.addWidget(self.hour_spin)
+
+        colon1 = QLabel(":")
+        colon1.setStyleSheet(f"color: {theme.text_secondary}; font-size: 14px; background: transparent;")
+        time_layout.addWidget(colon1)
+
+        self.min_spin = QSpinBox()
+        self.min_spin.setRange(0, 59)
+        self.min_spin.setValue(5)
+        self.min_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        time_layout.addWidget(self.min_spin)
+
+        colon2 = QLabel(":")
+        colon2.setStyleSheet(f"color: {theme.text_secondary}; font-size: 14px; background: transparent;")
+        time_layout.addWidget(colon2)
+
+        self.sec_spin = QSpinBox()
+        self.sec_spin.setRange(0, 59)
+        self.sec_spin.setValue(0)
+        self.sec_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        time_layout.addWidget(self.sec_spin)
+
+        self._main_layout.addWidget(time_container)
+        self._main_layout.addSpacing(16)
+
+        # 控制按钮
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+
+        self.start_btn = QPushButton("开始")
+        self.start_btn.clicked.connect(self._toggle)
+        btn_layout.addWidget(self.start_btn, 1)
+
+        self.reset_btn = QPushButton("重置")
+        self.reset_btn.clicked.connect(self._reset)
+        btn_layout.addWidget(self.reset_btn, 1)
+
+        self._main_layout.addLayout(btn_layout)
+        self._main_layout.addStretch()
+
+        # 定时器
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._tick)
+
+        self._apply_styles()
+
+    def _apply_styles(self):
+        """应用样式 - 优雅简约风格"""
+        spin_style = f"""
+            QSpinBox {{
+                background: {theme.bg_input};
+                border: 1px solid {theme.border};
+                border-radius: 8px;
+                padding: 6px 4px;
+                font-size: 13px;
+                color: {theme.text_primary};
+                min-width: 36px;
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                width: 16px;
+                background: transparent;
+            }}
+            QSpinBox:hover {{
+                border-color: {theme.text_tertiary};
+            }}
+        """
+        # 优雅的按钮样式 - 使用边框而非填充色
+        btn_style = f"""
+            QPushButton {{
+                background: transparent;
+                color: {theme.text_primary};
+                border: 1px solid {theme.border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background: {theme.bg_hover};
+                border-color: {theme.text_tertiary};
+            }}
+            QPushButton:pressed {{
+                background: {theme.bg_pressed};
+            }}
+        """
+        # 主按钮样式 - 稍微突出但不刺眼
+        start_btn_style = f"""
+            QPushButton {{
+                background: {theme.bg_hover};
+                color: {theme.text_primary};
+                border: 1px solid {theme.border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background: {theme.bg_pressed};
+                border-color: {theme.text_tertiary};
+            }}
+            QPushButton:pressed {{
+                background: {theme.bg_card};
+            }}
+        """
+        self.hour_spin.setStyleSheet(spin_style)
+        self.min_spin.setStyleSheet(spin_style)
+        self.sec_spin.setStyleSheet(spin_style)
+        self.start_btn.setStyleSheet(start_btn_style)
+        self.reset_btn.setStyleSheet(btn_style)
+
+    def _toggle(self):
+        """开始/暂停"""
+        if self.is_running:
+            self.timer.stop()
+            self.is_running = False
+            self.start_btn.setText("继续")
+        else:
+            if self.remaining_seconds == 0:
+                self.remaining_seconds = (self.hour_spin.value() * 3600 +
+                                         self.min_spin.value() * 60 +
+                                         self.sec_spin.value())
+            if self.remaining_seconds > 0:
+                self.timer.start(1000)
+                self.is_running = True
+                self.start_btn.setText("暂停")
+
+    def _reset(self):
+        """重置"""
+        self.timer.stop()
+        self.is_running = False
+        self.remaining_seconds = 0
+        self.start_btn.setText("开始")
+        self.display.setText("00:00:00")
+
+    def _tick(self):
+        """计时"""
+        if self.remaining_seconds > 0:
+            self.remaining_seconds -= 1
+            h = self.remaining_seconds // 3600
+            m = (self.remaining_seconds % 3600) // 60
+            s = self.remaining_seconds % 60
+            self.display.setText(f"{h:02d}:{m:02d}:{s:02d}")
+        else:
+            self.timer.stop()
+            self.is_running = False
+            self.start_btn.setText("开始")
+            # 播放提示音和弹窗
+            self._on_timer_end()
+
+    def _on_timer_end(self):
+        """倒计时结束处理"""
+        # 播放系统提示音
+        try:
+            import winsound
+            # 播放系统默认通知音
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        except:
+            pass
+
+        # 显示弹窗提示
+        self._show_notification()
+
+    def _show_notification(self):
+        """显示倒计时结束通知"""
+        from PyQt6.QtWidgets import QMessageBox
+
+        # 创建自定义消息框
+        msg = QMessageBox(self)
+        msg.setWindowTitle("倒计时结束")
+        msg.setText("时间到！")
+        msg.setInformativeText("您的倒计时已完成。")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {theme.bg_card};
+                border: 1px solid {theme.border};
+                border-radius: 12px;
+            }}
+            QMessageBox QLabel {{
+                color: {theme.text_primary};
+                font-size: 14px;
+                font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+            }}
+            QPushButton {{
+                background-color: {theme.bg_card};
+                color: {theme.text_primary};
+                border: 1px solid {theme.border};
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-size: 13px;
+                font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.bg_hover};
+                border-color: {theme.text_tertiary};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.bg_pressed};
+            }}
+        """)
+        msg.exec()
+
+        # 让窗口闪烁提醒
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            ctypes.windll.user32.FlashWindow(hwnd, True)
+        except:
+            pass
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+        self._apply_styles()
+
+    def update_content(self):
+        pass
+
+
+class WorldClockWidget(BaseWidget):
+    """世界时钟小组件"""
+    TIMEZONES = {
+        "北京": 8, "东京": 9, "纽约": -5, "伦敦": 0, "巴黎": 1,
+        "悉尼": 11, "迪拜": 4, "莫斯科": 3, "新加坡": 8, "洛杉矶": -8
+    }
+
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.selected_city = "纽约"
+        super().__init__(widget_id, "世界时钟", size)
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 城市选择
+        self.city_combo = QComboBox()
+        self.city_combo.addItems(list(self.TIMEZONES.keys()))
+        self.city_combo.setCurrentText(self.selected_city)
+        self.city_combo.currentTextChanged.connect(self._on_city_changed)
+        self.city_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {theme.bg_input};
+                border: 1px solid {theme.border};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
+                color: {theme.text_primary};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+        """)
+        self._main_layout.addWidget(self.city_combo)
+
+        # 时间显示
+        self.time_label = QLabel("--:--:--")
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.time_label.setStyleSheet(f"""
+            font-size: 32px;
+            font-weight: 300;
+            color: {theme.text_primary};
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.time_label)
+
+        # 日期显示
+        self.date_label = QLabel("")
+        self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.date_label.setStyleSheet(f"""
+            font-size: 12px;
+            color: {theme.text_secondary};
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.date_label)
+
+        # 时差显示
+        self.diff_label = QLabel("")
+        self.diff_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.diff_label.setStyleSheet(f"""
+            font-size: 11px;
+            color: {theme.text_tertiary};
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.diff_label)
+        self._main_layout.addStretch()
+
+        # 更新定时器
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._update_time)
+        self.timer.start(1000)
+        self._update_time()
+
+    def _on_city_changed(self, city):
+        """城市改变"""
+        self.selected_city = city
+        self._update_time()
+
+    def _update_time(self):
+        """更新时间"""
+        from datetime import datetime, timedelta
+        import time
+
+        utc_now = datetime.utcnow()
+        target_offset = self.TIMEZONES.get(self.selected_city, 0)
+        target_time = utc_now + timedelta(hours=target_offset)
+
+        self.time_label.setText(target_time.strftime("%H:%M:%S"))
+        self.date_label.setText(target_time.strftime("%Y年%m月%d日 %A"))
+
+        # 计算时差
+        local_offset = time.timezone // -3600  # 本地时区偏移
+        diff = target_offset - local_offset
+        if diff == 0:
+            self.diff_label.setText("与本地时间相同")
+        elif diff > 0:
+            self.diff_label.setText(f"比本地快 {diff} 小时")
+        else:
+            self.diff_label.setText(f"比本地慢 {abs(diff)} 小时")
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+
+    def update_content(self):
+        pass
+
+
+class NetworkMonitorWidget(BaseWidget):
+    """网络速度监控小组件"""
+    def __init__(self, widget_id: str, size: str = "medium"):
+        self.last_bytes_sent = 0
+        self.last_bytes_recv = 0
+        super().__init__(widget_id, "网络监控", size)
+
+    def _setup_ui(self):
+        super()._setup_ui()
+
+        # 下载速度
+        self.download_label = QLabel("↓ 0 KB/s")
+        self.download_label.setStyleSheet(f"""
+            color: {theme.accent};
+            font-size: 14px;
+            font-weight: 500;
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.download_label)
+
+        # 上传速度
+        self.upload_label = QLabel("↑ 0 KB/s")
+        self.upload_label.setStyleSheet(f"""
+            color: {theme.success};
+            font-size: 14px;
+            font-weight: 500;
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.upload_label)
+
+        self._main_layout.addSpacing(8)
+
+        # 磁盘使用率
+        self.disk_label = QLabel("磁盘: --")
+        self.disk_label.setStyleSheet(f"""
+            color: {theme.text_secondary};
+            font-size: 11px;
+            background: transparent;
+        """)
+        self._main_layout.addWidget(self.disk_label)
+
+        self._main_layout.addStretch()
+
+        # 初始化网络计数
+        net = psutil.net_io_counters()
+        self.last_bytes_sent = net.bytes_sent
+        self.last_bytes_recv = net.bytes_recv
+
+        # 更新定时器
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._update_stats)
+        self.timer.start(1000)
+        self._update_stats()
+
+    def _format_speed(self, bytes_per_sec):
+        """格式化速度"""
+        if bytes_per_sec < 1024:
+            return f"{bytes_per_sec:.0f} B/s"
+        elif bytes_per_sec < 1024 * 1024:
+            return f"{bytes_per_sec / 1024:.1f} KB/s"
+        else:
+            return f"{bytes_per_sec / 1024 / 1024:.1f} MB/s"
+
+    def _update_stats(self):
+        """更新统计"""
+        # 网络速度
+        net = psutil.net_io_counters()
+        download_speed = net.bytes_recv - self.last_bytes_recv
+        upload_speed = net.bytes_sent - self.last_bytes_sent
+        self.last_bytes_recv = net.bytes_recv
+        self.last_bytes_sent = net.bytes_sent
+
+        self.download_label.setText(f"↓ {self._format_speed(download_speed)}")
+        self.upload_label.setText(f"↑ {self._format_speed(upload_speed)}")
+
+        # 磁盘使用率
+        try:
+            disk = psutil.disk_usage('C:')
+            used_gb = disk.used / (1024 ** 3)
+            total_gb = disk.total / (1024 ** 3)
+            percent = disk.percent
+            self.disk_label.setText(f"磁盘 C: {used_gb:.0f}/{total_gb:.0f} GB ({percent}%)")
+        except:
+            pass
+
+    def update_style(self):
+        """更新样式"""
+        super().update_style()
+
+    def update_content(self):
+        pass
+
+
 class ImageWidget(BaseWidget):
     """图片小组件 - 支持自定义背景图片"""
     def __init__(self, widget_id: str, size: str = "medium"):
         self.image_path = ""
         self.crop_rect = None  # 裁剪区域 (x, y, width, height)
+        self.filter_type = "none"  # none, grayscale, sepia, blur
         super().__init__(widget_id, "图片", size)
 
     def _setup_ui(self):
         super()._setup_ui()
         # 不添加任何按钮，保持空白界面
-        self.layout.addStretch()
+        self._main_layout.addStretch()
         
     def _get_widget_ratio(self) -> float:
         """获取小组件的宽高比（使用实际窗口大小）"""
@@ -1470,17 +2692,24 @@ class ImageWidget(BaseWidget):
 
         m = self.SHADOW_MARGIN
         content_rect = QRect(m, m, self.width() - m * 2, self.height() - m * 2)
+        corner_radius = 16  # 圆角半径
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
         if self.image_path:
-            # 有图片，绘制图片背景
+            # 有图片，绘制图片背景（带圆角）
             pixmap = QPixmap(self.image_path)
             if not pixmap.isNull():
-                painter.setClipRect(content_rect)
-                
+                # 创建圆角矩形路径作为裁剪区域
+                from PyQt6.QtGui import QPainterPath
+                clip_path = QPainterPath()
+                clip_path.addRoundedRect(content_rect.x(), content_rect.y(), 
+                                          content_rect.width(), content_rect.height(),
+                                          corner_radius, corner_radius)
+                painter.setClipPath(clip_path)
+
                 if self.crop_rect:
                     # 使用裁剪区域绘制
                     cropped = pixmap.copy(self.crop_rect)
@@ -1489,7 +2718,6 @@ class ImageWidget(BaseWidget):
                         Qt.AspectRatioMode.IgnoreAspectRatio,
                         Qt.TransformationMode.SmoothTransformation
                     )
-                    painter.drawPixmap(content_rect, scaled_pixmap)
                 else:
                     # 无裁剪区域，按比例缩放填充
                     scaled_pixmap = pixmap.scaled(
@@ -1497,7 +2725,12 @@ class ImageWidget(BaseWidget):
                         Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                         Qt.TransformationMode.SmoothTransformation
                     )
-                    painter.drawPixmap(content_rect, scaled_pixmap, scaled_pixmap.rect())
+
+                # 应用滤镜
+                if self.filter_type != "none":
+                    scaled_pixmap = self._apply_filter(scaled_pixmap)
+
+                painter.drawPixmap(content_rect, scaled_pixmap, scaled_pixmap.rect())
         else:
             # 没有图片，绘制水印提示
             painter.setClipRect(content_rect)
@@ -1660,6 +2893,72 @@ class ImageWidget(BaseWidget):
                     break
             config.save()
 
+    def _apply_filter(self, pixmap):
+        """应用滤镜效果"""
+        from PyQt6.QtGui import QImage
+
+        img = pixmap.toImage()
+        result = QImage(img.size(), QImage.Format.Format_ARGB32)
+
+        for y in range(img.height()):
+            for x in range(img.width()):
+                color = img.pixelColor(x, y)
+                r, g, b = color.red(), color.green(), color.blue()
+
+                if self.filter_type == "grayscale":
+                    gray = int(0.299 * r + 0.587 * g + 0.114 * b)
+                    color = QColor(gray, gray, gray, color.alpha())
+                elif self.filter_type == "sepia":
+                    nr = min(255, int(0.393 * r + 0.769 * g + 0.189 * b))
+                    ng = min(255, int(0.349 * r + 0.686 * g + 0.168 * b))
+                    nb = min(255, int(0.272 * r + 0.534 * g + 0.131 * b))
+                    color = QColor(nr, ng, nb, color.alpha())
+                elif self.filter_type == "invert":
+                    color = QColor(255 - r, 255 - g, 255 - b, color.alpha())
+
+                result.setPixelColor(x, y, color)
+
+        return QPixmap.fromImage(result)
+
+    def _set_filter(self, filter_type):
+        """设置滤镜"""
+        self.filter_type = filter_type
+        self.update()
+
+        # 保存配置
+        for widget_config in config.widgets:
+            if widget_config.get("id") == self.widget_id:
+                widget_config["filter_type"] = filter_type
+                break
+        config.save()
+
+    def _get_context_menu(self):
+        """获取右键菜单"""
+        menu = super()._get_context_menu()
+        menu.addSeparator()
+
+        # 滤镜子菜单
+        filter_menu = menu.addMenu("滤镜效果")
+        filters = [("无", "none"), ("灰度", "grayscale"), ("复古", "sepia"), ("反色", "invert")]
+        for name, ftype in filters:
+            action = filter_menu.addAction(name)
+            action.setCheckable(True)
+            action.setChecked(self.filter_type == ftype)
+            action.triggered.connect(lambda checked, f=ftype: self._set_filter(f))
+
+        return menu
+
+    def _load_config(self):
+        """从配置加载"""
+        for widget_config in config.widgets:
+            if widget_config.get("id") == self.widget_id:
+                self.image_path = widget_config.get("image_path", "")
+                self.filter_type = widget_config.get("filter_type", "none")
+                crop = widget_config.get("crop_rect")
+                if crop:
+                    self.crop_rect = QRect(crop[0], crop[1], crop[2], crop[3])
+                break
+
 
 if WEBENGINE_AVAILABLE:
     class WebWidget(BaseWidget):
@@ -1751,8 +3050,8 @@ if WEBENGINE_AVAILABLE:
             control_layout.addWidget(self.go_btn)
 
             # 添加到布局
-            self.layout.addWidget(self.control_bar)
-            self.layout.addWidget(self.web_view, 1)
+            self._main_layout.addWidget(self.control_bar)
+            self._main_layout.addWidget(self.web_view, 1)
 
             # 默认显示提示页面
             self._show_placeholder()
@@ -1913,6 +3212,12 @@ class WidgetManager(QMainWindow):
         "TimerWidget": TimerWidget,
         "NotesWidget": NotesWidget,
         "ImageWidget": ImageWidget,
+        "MusicWidget": MusicWidget,
+        "WeatherWidget": WeatherWidget,
+        "TodoWidget": TodoWidget,
+        "AlarmWidget": AlarmWidget,
+        "WorldClockWidget": WorldClockWidget,
+        "NetworkMonitorWidget": NetworkMonitorWidget,
     }
 
     def __init__(self):
@@ -1926,6 +3231,12 @@ class WidgetManager(QMainWindow):
             ("计时器", "简单计时器", TimerWidget),
             ("笔记", "快速记录笔记", NotesWidget),
             ("图片", "自定义背景图片", ImageWidget),
+            ("音乐", "控制系统媒体播放", MusicWidget),
+            ("天气", "显示实时天气信息", WeatherWidget),
+            ("待办", "待办事项清单", TodoWidget),
+            ("倒计时", "倒计时提醒", AlarmWidget),
+            ("世界时钟", "显示世界各地时间", WorldClockWidget),
+            ("网络监控", "网络速度和磁盘使用", NetworkMonitorWidget),
         ]
 
         # 网页组件（需要 PyQt6-WebEngine）
@@ -1937,6 +3248,10 @@ class WidgetManager(QMainWindow):
         self._sidebar_collapsed = False
         self._sidebar_expanded_width = 240
         self._sidebar_collapsed_width = 56
+
+        # 全局快捷键
+        self._hotkey_id = 1
+        self._register_hotkey()
 
         self._init_ui()
         self._init_tray()
@@ -2168,13 +3483,32 @@ class WidgetManager(QMainWindow):
         available_title.setObjectName("section_title")
         available_section.addWidget(available_title)
 
+        # 搜索框
+        self.widget_search = QLineEdit()
+        self.widget_search.setPlaceholderText("🔍 搜索小组件...")
+        self.widget_search.textChanged.connect(self._filter_available_widgets)
+        self.widget_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {theme.bg_input};
+                border: 1px solid {theme.border};
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+                color: {theme.text_primary};
+            }}
+            QLineEdit:focus {{
+                border-color: {theme.accent};
+            }}
+        """)
+        available_section.addWidget(self.widget_search)
+
         self.available_frame = QFrame()
         self.available_frame.setObjectName("card")
-        available_layout = QGridLayout(self.available_frame)
-        available_layout.setContentsMargins(16, 16, 16, 16)
-        available_layout.setSpacing(12)
+        self.available_layout = QGridLayout(self.available_frame)
+        self.available_layout.setContentsMargins(16, 16, 16, 16)
+        self.available_layout.setSpacing(12)
 
-        self._populate_available_widgets_grid(available_layout)
+        self._populate_available_widgets_grid()
         available_section.addWidget(self.available_frame)
         layout.addLayout(available_section)
 
@@ -2183,15 +3517,23 @@ class WidgetManager(QMainWindow):
         self.widgets_page = page
         self.content_layout.addWidget(page)
 
-    def _populate_available_widgets_grid(self, layout):
+    def _populate_available_widgets_grid(self, filter_text=""):
         """填充可用小组件网格"""
         # 清除现有内容
-        while layout.count():
-            item = layout.takeAt(0)
+        while self.available_layout.count():
+            item = self.available_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        for idx, (name, desc, widget_class) in enumerate(self.available_widgets):
+        filtered_widgets = self.available_widgets
+        if filter_text:
+            filter_lower = filter_text.lower()
+            filtered_widgets = [
+                (name, desc, cls) for name, desc, cls in self.available_widgets
+                if filter_lower in name.lower() or filter_lower in desc.lower()
+            ]
+
+        for idx, (name, desc, widget_class) in enumerate(filtered_widgets):
             card = QFrame()
             card.setObjectName("widget_card")
             card.setFixedSize(150, 90)
@@ -2213,7 +3555,11 @@ class WidgetManager(QMainWindow):
 
             # 点击添加
             card.mousePressEvent = lambda e, w=widget_class, n=name: self._add_widget(w, n)
-            layout.addWidget(card, idx // 3, idx % 3)
+            self.available_layout.addWidget(card, idx // 3, idx % 3)
+
+    def _filter_available_widgets(self, text):
+        """过滤可用小组件"""
+        self._populate_available_widgets_grid(text)
 
     def _create_settings_page(self):
         """创建设置页面"""
@@ -2265,6 +3611,36 @@ class WidgetManager(QMainWindow):
         self.theme_btn.clicked.connect(self._toggle_theme)
         theme_row.addWidget(self.theme_btn)
         appearance_layout.addLayout(theme_row)
+
+        # 配色方案
+        color_row = QHBoxLayout()
+        color_info = QVBoxLayout()
+        color_label = QLabel("配色方案")
+        color_label.setObjectName("setting_label")
+        color_info.addWidget(color_label)
+
+        color_desc = QLabel("选择主题强调色")
+        color_desc.setObjectName("setting_desc")
+        color_info.addWidget(color_desc)
+        color_row.addLayout(color_info)
+        color_row.addStretch()
+
+        self.color_combo = QComboBox()
+        self.color_combo.addItems(["蓝色", "绿色", "紫色", "橙色", "红色", "青色"])
+        color_map = {"blue": 0, "green": 1, "purple": 2, "orange": 3, "red": 4, "teal": 5}
+        self.color_combo.setCurrentIndex(color_map.get(config.color_scheme, 0))
+        self.color_combo.currentIndexChanged.connect(self._on_color_changed)
+        self.color_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {theme.bg_input};
+                border: 1px solid {theme.border};
+                border-radius: 6px;
+                padding: 8px 12px;
+                min-width: 100px;
+            }}
+        """)
+        color_row.addWidget(self.color_combo)
+        appearance_layout.addLayout(color_row)
 
         # 透明度设置
         opacity_row = QHBoxLayout()
@@ -2356,6 +3732,21 @@ class WidgetManager(QMainWindow):
         for widget in self.widgets.values():
             widget.opacity = config.widget_opacity
             widget.update()
+
+    def _on_color_changed(self, index):
+        """配色方案改变"""
+        colors = ["blue", "green", "purple", "orange", "red", "teal"]
+        config.color_scheme = colors[index]
+        config.save()
+
+        # 更新主题颜色
+        theme.color_scheme = config.color_scheme
+        theme._update_colors()
+
+        # 刷新所有小组件样式
+        for widget in self.widgets.values():
+            widget.update_style()
+        self._apply_styles()
 
     def _on_snap_changed(self, state):
         """吸附开关改变"""
@@ -2760,9 +4151,23 @@ class WidgetManager(QMainWindow):
         theme_action = self.tray_menu.addAction("切换主题")
         theme_action.triggered.connect(self._toggle_theme)
 
+        # 开机自启动
+        self.autostart_action = self.tray_menu.addAction("开机自启动")
+        self.autostart_action.setCheckable(True)
+        self.autostart_action.setChecked(self._is_autostart_enabled())
+        self.autostart_action.triggered.connect(self._toggle_autostart)
+
         # 一键解除鼠标穿透
         disable穿透_action = self.tray_menu.addAction("解除所有鼠标穿透")
         disable穿透_action.triggered.connect(self._disable_all_click_through)
+
+        self.tray_menu.addSeparator()
+
+        # 导出/导入配置
+        export_action = self.tray_menu.addAction("导出配置")
+        export_action.triggered.connect(self._export_config)
+        import_action = self.tray_menu.addAction("导入配置")
+        import_action.triggered.connect(self._import_config)
 
         self.tray_menu.addSeparator()
 
@@ -2980,10 +4385,117 @@ class WidgetManager(QMainWindow):
 
         self._refresh_widget_list()
 
+    def _is_autostart_enabled(self) -> bool:
+        """检查是否已启用开机自启动"""
+        import sys
+        import winreg
+
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, "DashWidgets")
+            winreg.CloseKey(key)
+            return True
+        except WindowsError:
+            return False
+
+    def _toggle_autostart(self):
+        """切换开机自启动"""
+        import sys
+        import winreg
+
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        exe_path = sys.executable if getattr(sys, 'frozen', False) else f'"{sys.executable}" "{__file__}"'
+
+        if self.autostart_action.isChecked():
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE)
+                winreg.SetValueEx(key, "DashWidgets", 0, winreg.REG_SZ, exe_path)
+                winreg.CloseKey(key)
+                self.tray_icon.showMessage("DashWidgets", "已启用开机自启动", QSystemTrayIcon.MessageIcon.Information, 2000)
+            except Exception as e:
+                self.autostart_action.setChecked(False)
+                self.tray_icon.showMessage("DashWidgets", f"设置失败: {e}", QSystemTrayIcon.MessageIcon.Warning, 2000)
+        else:
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_WRITE)
+                winreg.DeleteValue(key, "DashWidgets")
+                winreg.CloseKey(key)
+                self.tray_icon.showMessage("DashWidgets", "已关闭开机自启动", QSystemTrayIcon.MessageIcon.Information, 2000)
+            except WindowsError:
+                pass
+
+    def _export_config(self):
+        """导出配置"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "导出配置", "dashwidgets_config.json", "JSON文件 (*.json)"
+        )
+        if file_path:
+            try:
+                # 保存当前配置
+                config.save()
+                # 复制到目标位置
+                import shutil
+                shutil.copy(CONFIG_FILE, file_path)
+                self.tray_icon.showMessage("DashWidgets", f"配置已导出到: {file_path}", QSystemTrayIcon.MessageIcon.Information, 2000)
+            except Exception as e:
+                self.tray_icon.showMessage("DashWidgets", f"导出失败: {e}", QSystemTrayIcon.MessageIcon.Warning, 2000)
+
+    def _import_config(self):
+        """导入配置"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "导入配置", "", "JSON文件 (*.json)"
+        )
+        if file_path:
+            try:
+                # 读取配置文件
+                data = json.loads(Path(file_path).read_text(encoding="utf-8"))
+                # 应用配置
+                config.widgets = data.get("widgets", [])
+                config.light_mode = data.get("light_mode", True)
+                config.widget_opacity = data.get("widget_opacity", 0.95)
+                config.save()
+                # 应用主题
+                theme.light_mode = config.light_mode
+                theme._update_colors()
+                # 重新加载小组件
+                self._restore_widgets()
+                self.tray_icon.showMessage("DashWidgets", "配置已导入，请重启应用以完全生效", QSystemTrayIcon.MessageIcon.Information, 2000)
+            except Exception as e:
+                self.tray_icon.showMessage("DashWidgets", f"导入失败: {e}", QSystemTrayIcon.MessageIcon.Warning, 2000)
+
     def _quit_app(self):
         """退出应用"""
         self.tray_icon.hide()
         QApplication.quit()
+
+    def _register_hotkey(self):
+        """注册全局热键 (Win+Shift+D 显示/隐藏管理器)"""
+        import ctypes
+        # MOD_WIN = 0x0008, MOD_SHIFT = 0x0004, D = 0x44
+        ctypes.windll.user32.RegisterHotKey(
+            int(self.winId()), self._hotkey_id, 0x0008 | 0x0004, 0x44
+        )
+
+    def _unregister_hotkey(self):
+        """注销热键"""
+        import ctypes
+        ctypes.windll.user32.UnregisterHotKey(int(self.winId()), self._hotkey_id)
+
+    def nativeEvent(self, eventType, message):
+        """处理Windows原生事件"""
+        if eventType == b"windows_generic_MSG":
+            import ctypes
+            msg = ctypes.cast(int(message), ctypes.POINTER(ctypes.c_uint32 * 6)).contents
+            if msg[0] == 0x0312:  # WM_HOTKEY
+                if msg[1] == self._hotkey_id:
+                    if self.isVisible():
+                        self.hide()
+                    else:
+                        self.show()
+                        self.activateWindow()
+                    return True, 0
+        return False, 0
 
     def closeEvent(self, event):
         """关闭时最小化到托盘"""
