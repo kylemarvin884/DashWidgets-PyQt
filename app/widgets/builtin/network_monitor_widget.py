@@ -66,17 +66,17 @@ class SpeedIndicator(QWidget):
             p.drawPath(tri)
             p.drawRect(int(icon_cx - 2), int(icon_cy - 8), 3, 5)
 
-        # 文字区域（从 x=36 开始）
-        tx = 36
+        # 文字区域（从 x=30 开始，留更多右侧空间）
+        tx = 30
 
         # 标签行：UP / DN
         label_str = "UP" if self._dir == "up" else "DN"
-        label_font = QFont("Segoe UI Variable", 10, QFont.Weight.Normal)
+        label_font = QFont("Segoe UI Variable", 9, QFont.Weight.Normal)
         p.setFont(label_font)
         p.setPen(QColor(c["text_secondary"]))
         p.drawText(QPointF(tx, h // 2 - 6), label_str)
 
-        # 数值行：大号数字 + 单位
+        # 数值行：数字 + 单位（缩小字体避免小数部分被裁剪）
         if self._speed < 1024 * 1024:
             num_str = f"{self._speed / 1024:.0f}"
             unit_str = "KB/s"
@@ -84,16 +84,17 @@ class SpeedIndicator(QWidget):
             num_str = f"{self._speed / (1024 * 1024):.1f}"
             unit_str = "MB/s"
 
-        speed_font = QFont("Segoe UI Variable", 17, QFont.Weight.Light)
+        speed_font = QFont("Segoe UI Variable", 14, QFont.Weight.Light)
         p.setFont(speed_font)
         p.setPen(QColor(c["text"]))
-        p.drawText(QPointF(tx, h // 2 + 14), num_str)
+        num_fm = QFontMetrics(speed_font)
+        num_width = num_fm.horizontalAdvance(num_str)
+        p.drawText(QPointF(tx, h // 2 + 12), num_str)
 
         unit_font = QFont("Segoe UI Variable", 9, QFont.Weight.Light)
         p.setFont(unit_font)
         p.setPen(QColor(c["text_dim"]))
-        num_width = QFontMetrics(speed_font).horizontalAdvance(num_str)
-        p.drawText(QPointF(tx + num_width + 3, h // 2 + 12), unit_str)
+        p.drawText(QPointF(tx + num_width + 3, h // 2 + 11), unit_str)
 
         p.end()
 

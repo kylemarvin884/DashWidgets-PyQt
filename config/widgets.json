@@ -108,11 +108,8 @@
             "icon_name": "SPEED_HIGH",
             "size": "medium",
             "category": "系统",
-            "is_active": true,
-            "position": [
-                184,
-                445
-            ],
+            "is_active": false,
+            "position": null,
             "size_override": [
                 200,
                 200
