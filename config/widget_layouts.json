@@ -1,0 +1,131 @@
+{
+    "layouts": {
+        "default": {
+            "name": "默认布局",
+            "grid_cols": 4,
+            "grid_rows": 6,
+            "items": [
+                {
+                    "widget_id": "clock",
+                    "row": 0,
+                    "col": 0,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "stopwatch",
+                    "row": 0,
+                    "col": 1,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "timer",
+                    "row": 0,
+                    "col": 2,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "pomodoro",
+                    "row": 0,
+                    "col": 3,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "system_monitor",
+                    "row": 1,
+                    "col": 0,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "network_monitor",
+                    "row": 1,
+                    "col": 1,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "calendar",
+                    "row": 1,
+                    "col": 2,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "todo",
+                    "row": 1,
+                    "col": 3,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "note",
+                    "row": 2,
+                    "col": 0,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "weather",
+                    "row": 2,
+                    "col": 1,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "music",
+                    "row": 2,
+                    "col": 2,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "exchange",
+                    "row": 2,
+                    "col": 3,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "rss",
+                    "row": 3,
+                    "col": 0,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "shortcut",
+                    "row": 3,
+                    "col": 1,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "automation",
+                    "row": 3,
+                    "col": 2,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "image",
+                    "row": 3,
+                    "col": 3,
+                    "row_span": 1,
+                    "col_span": 1
+                },
+                {
+                    "widget_id": "document_viewer",
+                    "row": 4,
+                    "col": 0,
+                    "row_span": 1,
+                    "col_span": 1
+                }
+            ]
+        }
+    },
+    "active_layout": "default"
+}

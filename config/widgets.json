@@ -1,0 +1,320 @@
+{
+    "widgets": [
+        {
+            "id": "clock",
+            "name": "时钟",
+            "description": "显示当前时间和日期",
+            "icon_name": "STOP_WATCH",
+            "size": "medium",
+            "category": "时间",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {
+                "font_size": 81,
+                "text_color": "#70fffa",
+                "opacity": 0.8
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "stopwatch",
+            "name": "秒表",
+            "description": "精确计时功能",
+            "icon_name": "HISTORY",
+            "size": "small",
+            "category": "时间",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                150,
+                150
+            ],
+            "custom_settings": {
+                "size": "small",
+                "border_radius": 16,
+                "opacity": 0.5,
+                "shadow": "中等"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "timer",
+            "name": "计时器",
+            "description": "倒计时功能",
+            "icon_name": "DATE_TIME",
+            "size": "small",
+            "category": "时间",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "pomodoro",
+            "name": "番茄钟",
+            "description": "25分钟专注工作",
+            "icon_name": "CAFE",
+            "size": "medium",
+            "category": "时间",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "system_monitor",
+            "name": "系统监控",
+            "description": "CPU、内存使用率",
+            "icon_name": "SETTING",
+            "size": "small",
+            "category": "系统",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                300,
+                300
+            ],
+            "custom_settings": {
+                "size": "large",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "network_monitor",
+            "name": "网络监控",
+            "description": "网速、磁盘使用率",
+            "icon_name": "SPEED_HIGH",
+            "size": "medium",
+            "category": "系统",
+            "is_active": true,
+            "position": [
+                184,
+                445
+            ],
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "calendar",
+            "name": "日历",
+            "description": "显示当前日期",
+            "icon_name": "CALENDAR",
+            "size": "medium",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "todo",
+            "name": "待办事项",
+            "description": "管理每日任务",
+            "icon_name": "CHECKBOX",
+            "size": "large",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {},
+            "plugin_id": null
+        },
+        {
+            "id": "note",
+            "name": "笔记",
+            "description": "快速记录想法",
+            "icon_name": "EDIT",
+            "size": "medium",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "weather",
+            "name": "天气",
+            "description": "实时天气信息",
+            "icon_name": "CLOUD",
+            "size": "medium",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "music",
+            "name": "音乐播放器",
+            "description": "控制媒体播放",
+            "icon_name": "MUSIC",
+            "size": "medium",
+            "category": "娱乐",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "exchange",
+            "name": "汇率",
+            "description": "汇率查询",
+            "icon_name": "UNIT",
+            "size": "medium",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {},
+            "plugin_id": null
+        },
+        {
+            "id": "rss",
+            "name": "RSS订阅",
+            "description": "新闻资讯订阅",
+            "icon_name": "MESSAGE",
+            "size": "large",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {},
+            "plugin_id": null
+        },
+        {
+            "id": "shortcut",
+            "name": "快捷方式",
+            "description": "快速启动应用",
+            "icon_name": "LINK",
+            "size": "medium",
+            "category": "工具",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {},
+            "plugin_id": null
+        },
+        {
+            "id": "automation",
+            "name": "自动化点击",
+            "description": "自动执行点击操作",
+            "icon_name": "ROBOT",
+            "size": "medium",
+            "category": "工具",
+            "is_active": false,
+            "position": null,
+            "size_override": null,
+            "custom_settings": {},
+            "plugin_id": null
+        },
+        {
+            "id": "image",
+            "name": "图片",
+            "description": "显示本地图片，支持裁剪区域",
+            "icon_name": "PICTURE",
+            "size": "medium",
+            "category": "信息",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                200,
+                200
+            ],
+            "custom_settings": {
+                "size": "medium",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        },
+        {
+            "id": "document_viewer",
+            "name": "文档查看器",
+            "description": "查看 PDF、Word、Markdown、TXT 文档",
+            "icon_name": "DOCUMENT",
+            "size": "large",
+            "category": "工具",
+            "is_active": false,
+            "position": null,
+            "size_override": [
+                300,
+                300
+            ],
+            "custom_settings": {
+                "size": "large",
+                "border_radius": 16,
+                "opacity": 0.95,
+                "shadow": "轻微"
+            },
+            "plugin_id": null
+        }
+    ]
+}

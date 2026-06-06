@@ -1,0 +1,16 @@
+{
+  "location": [
+    30.5723,
+    104.067
+  ],
+  "weather": {
+    "temperature": 30.5,
+    "condition": "多云",
+    "icon": "CLOUD",
+    "humidity": 61,
+    "wind_speed": 5.0,
+    "city": "Chengdu",
+    "country": "China",
+    "last_updated": 1779599835.0960064
+  }
+}

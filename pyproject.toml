@@ -1,17 +1,22 @@
 [project]
-name = "dashwidgets-pyqt"
-version = "0.1.0"
-description = "Windows桌面小组件管理器 - PyQt版本"
+name = "dashwidgets"
+version = "1.0.0"
+description = "Windows桌面小组件管理器 - PySide6 + Fluent Design"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "PyQt6>=6.6.0",
-    "PyQt6-Fluent-Widgets>=1.6.0",
-    "PyQt6-WebEngine>=6.6.0",
+    "PySide6>=6.6.0",
+    "PySide6-Fluent-Widgets>=1.7.5",
     "loguru>=0.7.3",
     "psutil>=5.9.0",
-    "pycaw>=20181226",
+    "feedparser>=6.0.0",
+    "pynput>=1.7.6",
 ]
 
 [project.scripts]
 dashwidgets = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+]

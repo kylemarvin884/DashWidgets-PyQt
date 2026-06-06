@@ -4,7 +4,7 @@
 
 **Windows 桌面小组件管理器**
 
-基于 PyQt6 开发的现代化桌面小组件系统
+基于 PySide6 开发的现代化桌面小组件系统
 
 [功能特性](#-功能特性) • [安装使用](#-安装使用) • [组件介绍](#-组件介绍) • [开发](#-开发)
 
@@ -70,13 +70,13 @@ DashWidgets 是一款受 Windows 11 小组件面板启发的桌面小组件管�
 ```bash
 # 克隆项目
 git clone https://github.com/yourusername/DashWidgets.git
-cd DashWidgets/DashWidgets-PyQt
+cd DashWidgets/DashWidgets-PySide
 
 # 安装依赖 (推荐使用 uv)
 uv sync
 
 # 或使用 pip
-pip install PyQt6 PyQt6-WebEngine loguru psutil pycaw
+pip install PySide6  loguru psutil pycaw
 
 # 运行
 python main.py
@@ -94,8 +94,8 @@ pyinstaller --name "DashWidgets" --windowed --onedir \
   --icon "assets/images/logo.ico" \
   --add-data "assets;assets" \
   --add-data "config;config" \
-  --hidden-import "PyQt6.QtWebEngineWidgets" \
-  --collect-all "PyQt6" \
+  --hidden-import "" \
+   \
   main.py
 ```
 
@@ -138,7 +138,7 @@ pyinstaller --name "DashWidgets" --windowed --onedir \
 ## 🔧 开发
 
 ### 技术栈
-- **GUI 框架**: PyQt6
+- **GUI 框架**: PySide6
 - **网页引擎**: QtWebEngine (可选)
 - **日志系统**: Loguru
 - **系统监控**: psutil
@@ -183,7 +183,7 @@ DashWidgets-PyQt/
 
 ## 🙏 致谢
 
-- [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) - GUI 框架
+- [PySide6](https://www.riverbankcomputing.com/software/pyqt/) - GUI 框架
 - [Loguru](https://github.com/Delgan/loguru) - 日志库
 - [psutil](https://github.com/giampaolo/psutil) - 系统监控
 - [wttr.in](https://wttr.in/) - 天气 API

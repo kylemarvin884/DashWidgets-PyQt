@@ -1,0 +1,13 @@
+{
+  "id": "example_lib",
+  "name": "示例工具库",
+  "version": "1.0.0",
+  "author": "你的名字",
+  "description": "演示依赖插件（LibraryPlugin）格式：提供可被其他插件复用的工具方法",
+  "homepage": "https://github.com/your/repo",
+  "plugin_type": "library",
+  "min_host_version": "0.1.0",
+  "dependencies": [],
+  "requires": [],
+  "tags": ["library", "example", "utils"]
+}
