@@ -246,19 +246,6 @@
             "plugin_id": null
         },
         {
-            "id": "shortcut",
-            "name": "快捷方式",
-            "description": "快速启动应用",
-            "icon_name": "LINK",
-            "size": "medium",
-            "category": "工具",
-            "is_active": false,
-            "position": null,
-            "size_override": null,
-            "custom_settings": {},
-            "plugin_id": null
-        },
-        {
             "id": "automation",
             "name": "自动化点击",
             "description": "自动执行点击操作",
@@ -287,8 +274,9 @@
             "custom_settings": {
                 "size": "medium",
                 "border_radius": 16,
-                "opacity": 0.95,
-                "shadow": "轻微"
+                "opacity": 0.5,
+                "shadow": "轻微",
+                "image_path": "C:/Users/paulc/Desktop/微信图片_2026-02-21_173619_419.jpg"
             },
             "plugin_id": null
         },
@@ -299,8 +287,11 @@
             "icon_name": "DOCUMENT",
             "size": "large",
             "category": "工具",
-            "is_active": false,
-            "position": null,
+            "is_active": true,
+            "position": [
+                704,
+                398
+            ],
             "size_override": [
                 300,
                 300
@@ -309,7 +300,8 @@
                 "size": "large",
                 "border_radius": 16,
                 "opacity": 0.95,
-                "shadow": "轻微"
+                "shadow": "轻微",
+                "doc_path": ""
             },
             "plugin_id": null
         }

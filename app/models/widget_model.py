@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from dataclasses import dataclass, field, asdict
 
+from PySide6.QtCore import QObject, Signal
+
 from app.constants import WIDGET_CONFIG
 from loguru import logger
 
@@ -138,13 +140,6 @@ AVAILABLE_WIDGETS: list[WidgetInfo] = [
         category="信息",
     ),
     WidgetInfo(
-        id="shortcut",
-        name="快捷方式",
-        description="快速启动应用",
-        icon_name="LINK",
-        category="工具",
-    ),
-    WidgetInfo(
         id="automation",
         name="自动化点击",
         description="自动执行点击操作",
@@ -169,8 +164,10 @@ AVAILABLE_WIDGETS: list[WidgetInfo] = [
 ]
 
 
-class WidgetModel:
-    """小组件数据模型"""
+class WidgetModel(QObject):
+    """小组件数据模型 — 支持实时信号通知"""
+
+    widgets_changed = Signal()  # 组件状态（激活/停用）发生变化时发射
 
     _instance: "WidgetModel | None" = None
 
@@ -182,6 +179,7 @@ class WidgetModel:
     def __init__(self):
         if hasattr(self, "_initialized"):
             return
+        super().__init__()
         self._initialized: bool = True
 
         self._widgets: dict[str, WidgetInfo] = {}
@@ -318,6 +316,7 @@ class WidgetModel:
         if widget_id in self._widgets:
             self._widgets[widget_id].is_active = True
             self.save()
+            self.widgets_changed.emit()
             logger.info(f"激活小组件: {widget_id}")
 
     def deactivate_widget(self, widget_id: str):
@@ -326,6 +325,7 @@ class WidgetModel:
             self._widgets[widget_id].is_active = False
             self._widgets[widget_id].position = None
             self.save()
+            self.widgets_changed.emit()
             logger.info(f"停用小组件: {widget_id}")
 
     def update_widget_position(self, widget_id: str, position: tuple[int, int]):

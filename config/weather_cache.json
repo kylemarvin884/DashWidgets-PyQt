@@ -4,13 +4,13 @@
     104.067
   ],
   "weather": {
-    "temperature": 30.5,
-    "condition": "多云",
-    "icon": "CLOUD",
-    "humidity": 61,
-    "wind_speed": 5.0,
+    "temperature": 35.7,
+    "condition": "大部晴朗",
+    "icon": "PARTLY_SUNNY",
+    "humidity": 30,
+    "wind_speed": 12.1,
     "city": "Chengdu",
     "country": "China",
-    "last_updated": 1779599835.0960064
+    "last_updated": 1780730719.627632
   }
 }

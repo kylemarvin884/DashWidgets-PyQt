@@ -9,7 +9,6 @@ from app.widgets.builtin.weather_widget import WeatherWidget
 from app.widgets.builtin.calendar_widget import CalendarWidget
 from app.widgets.builtin.todo_widget import TodoWidget
 from app.widgets.builtin.music_widget import MusicWidget
-from app.widgets.builtin.shortcut_widget import ShortcutWidget
 from app.widgets.builtin.note_widget import NoteWidget
 from app.widgets.builtin.exchange_widget import ExchangeWidget
 from app.widgets.builtin.rss_widget import RssWidget
@@ -21,6 +20,6 @@ __all__ = [
     'ClockWidget', 'StopwatchWidget', 'TimerWidget', 'PomodoroWidget',
     'SystemMonitorWidget', 'NetworkMonitorWidget',
     'WeatherWidget', 'CalendarWidget', 'TodoWidget', 'MusicWidget',
-    'ShortcutWidget', 'NoteWidget', 'ExchangeWidget', 'RssWidget',
+    'NoteWidget', 'ExchangeWidget', 'RssWidget',
     'AutomationWidget', 'ImageWidget', 'DocumentViewerWidget',
 ]
