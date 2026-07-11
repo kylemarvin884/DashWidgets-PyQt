@@ -163,27 +163,275 @@ class MainWindow(FluentWindow):
         self.setWindowIcon(QIcon(str(ICON_PATH)) if ICON_PATH else QIcon())
         self.setWindowTitle(f"{APP_NAME}  {LONG_VER}")
 
-        # 启用云母效果（Windows 11）
-        self._setup_mica()
+        # 应用 Claude 设计系统样式（覆盖 qfluentwidgets 默认风格）
+        self._apply_claude_style()
 
         # 添加测试版本水印
+
+    def _apply_claude_style(self):
+        """应用 Claude 设计系统 — 奶油画布 + 珊瑚红 + 衬线标题 + 圆角卡片"""
+        self.setStyleSheet("""
+            /* ═══ 主窗口 ═══ */
+            #DashWidgets {
+                background-color: #faf9f5;
+            }
+
+            /* ═══ 导航面板 ═══ */
+            NavigationInterface {
+                background-color: #f5f0e8;
+                border-right: 1px solid #e6dfd8;
+            }
+            QWidget#navigationInterface {
+                background-color: #f5f0e8;
+                border-right: 1px solid #e6dfd8;
+            }
+            /* 导航项 */
+            NavigationPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+                font-weight: 500;
+                color: #6c6a64;
+            }
+            NavigationPushButton:hover {
+                background-color: #efe9de;
+                color: #141413;
+            }
+            NavigationPushButton:checked, NavigationPushButton[isSelected="true"] {
+                background-color: #e8e0d2;
+                color: #141413;
+            }
+            /* 导航分隔线 */
+            NavigationSeparator {
+                background-color: #e6dfd8;
+            }
+
+            /* ═══ 卡片 — 12px 圆角，奶油色底 ═══ */
+            CardWidget, SimpleCardWidget, HeaderCardWidget {
+                background-color: #efe9de;
+                border: 1px solid #e6dfd8;
+                border-radius: 12px;
+            }
+            /* 设置卡片 */
+            SettingCard {
+                background-color: #efe9de;
+                border: 1px solid #e6dfd8;
+                border-radius: 12px;
+            }
+
+            /* ═══ 按钮 ═══ */
+            /* 主按钮 — 黑色 */
+            PrimaryPushButton, PushButton {
+                background-color: #141413;
+                color: #faf9f5;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            PrimaryPushButton:hover, PushButton:hover {
+                background-color: #252523;
+            }
+            PrimaryPushButton:pressed, PushButton:pressed {
+                background-color: #252523;
+            }
+            PrimaryPushButton:disabled, PushButton:disabled {
+                background-color: #e6dfd8;
+                color: #6c6a64;
+            }
+            /* 次要/透明按钮 */
+            TransparentPushButton, ToolButton {
+                background-color: transparent;
+                color: #141413;
+                border: none;
+                border-radius: 8px;
+                padding: 8px;
+            }
+            TransparentPushButton:hover, ToolButton:hover {
+                background-color: #efe9de;
+            }
+
+            /* ═══ 输入框 ═══ */
+            LineEdit, ComboBox, SpinBox {
+                background-color: #ffffff;
+                color: #141413;
+                border: 1px solid #e6dfd8;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+            LineEdit:focus, ComboBox:focus, SpinBox:focus {
+                border: 2px solid #cc785c;
+                padding: 7px 11px;
+            }
+            TextEdit, PlainTextEdit {
+                background-color: #ffffff;
+                color: #141413;
+                border: 1px solid #e6dfd8;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+
+            /* ═══ 文字标签 ═══ */
+            StrongBodyLabel {
+                color: #141413;
+                font-weight: 500;
+            }
+            BodyLabel {
+                color: #3d3d3a;
+                font-weight: 400;
+            }
+            CaptionLabel {
+                color: #6c6a64;
+                font-size: 13px;
+            }
+            SubtitleLabel {
+                color: #141413;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            TitleLabel {
+                font-family: Georgia, Cambria, serif;
+                font-weight: 400;
+                letter-spacing: -0.5px;
+            }
+
+            /* ═══ 菜单 ═══ */
+            QMenu, RoundMenu {
+                background-color: #ffffff;
+                border: 1px solid #e6dfd8;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item, RoundMenu::item {
+                padding: 8px 24px;
+                border-radius: 6px;
+                color: #141413;
+            }
+            QMenu::item:selected, RoundMenu::item:selected {
+                background-color: #efe9de;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #e6dfd8;
+                margin: 4px 8px;
+            }
+
+            /* ═══ 滚动条 ═══ */
+            QScrollBar:vertical {
+                background: transparent;
+                width: 6px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(20,20,19,0.15);
+                border-radius: 3px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(20,20,19,0.25);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QScrollBar:horizontal {
+                background: transparent;
+                height: 6px;
+                margin: 0;
+            }
+            QScrollBar::handle:horizontal {
+                background: rgba(20,20,19,0.15);
+                border-radius: 3px;
+                min-width: 30px;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0;
+            }
+
+            /* ═══ 滚动区域 ═══ */
+            QScrollArea, ScrollArea {
+                background-color: transparent;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: transparent;
+            }
+
+            /* ═══ 分隔线 ═══ */
+            QFrame[separator="true"] {
+                background-color: #e6dfd8;
+                max-height: 1px;
+                border: none;
+            }
+
+            /* ═══ 进度条 ═══ */
+            QProgressBar {
+                background-color: #e6dfd8;
+                border: none;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: #cc785c;
+                border-radius: 3px;
+            }
+
+            /* ═══ 复选框 ═══ */
+            QCheckBox {
+                color: #3d3d3a;
+                font-size: 14px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #e6dfd8;
+                border-radius: 4px;
+                background-color: #ffffff;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #cc785c;
+                border-color: #cc785c;
+            }
+
+            /* ═══ 选项卡 ═══ */
+            QTabWidget::pane {
+                border: 1px solid #e6dfd8;
+                border-radius: 8px;
+                background-color: #faf9f5;
+            }
+            QTabBar::tab {
+                background-color: transparent;
+                color: #6c6a64;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QTabBar::tab:selected {
+                background-color: #efe9de;
+                color: #141413;
+            }
+
+            /* ═══ 工具提示 ═══ */
+            QToolTip {
+                background-color: #252320;
+                color: #faf9f5;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+        """)
         self._add_watermark()
 
     def _setup_mica(self):
-        """启用云母效果（仅 Windows 11）"""
-        try:
-            if self._settings.get_mica_enabled():
-                # 检查是否是 Windows 11
-                import platform
-
-                version = platform.version()
-                if int(version.split(".")[2]) >= 22000:  # Windows 11 build 22000+
-                    self.setMicaEnabled(True)
-                    logger.info("云母效果已启用")
-                else:
-                    logger.info("当前系统不支持云母效果（需要 Windows 11）")
-        except Exception as e:
-            logger.warning("启用云母效果失败: {}", e)
+        """云母效果已禁用 — Claude 设计使用不透明奶油画布"""
+        pass
 
     def _add_watermark(self):
         """添加水印"""
@@ -193,7 +441,7 @@ class MainWindow(FluentWindow):
         self._watermark = QLabel("内部测试 · 非最终版", self)
         self._watermark.setStyleSheet("""
             QLabel {
-                color: rgba(160, 160, 160, 200);
+                color: rgba(108, 106, 100, 180);
                 font-size: 13px;
                 font-weight: 500;
                 background: transparent;

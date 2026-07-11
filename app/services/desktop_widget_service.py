@@ -182,24 +182,47 @@ widget_signals = _WidgetSignals()
 # ── Win11 风格工具类 ─────────────────────────────────────────────── #
 
 class Win11Style:
-    """Windows 11 风格常量与工具方法"""
+    """Claude 风格设计系统 — 奶油画布 + 珊瑚红 + 深海军蓝"""
 
-    FONT_FAMILY = "Microsoft YaHei UI, Segoe UI, sans-serif"
+    # 字体：衬线标题 + 人文无衬线正文
+    FONT_SERIF = 'Georgia, Cambria, "Times New Roman", serif'
+    FONT_SANS = '"Segoe UI Variable", "Segoe UI", Inter, sans-serif'
+    FONT_FAMILY = FONT_SANS  # 兼容旧引用
 
+    # ── 浅色模式：奶油画布 ── #
     _LIGHT = {
-        "bg": "#f5f5f5", "card_bg": "#ffffff", "card_border": "#e5e5e5",
-        "text_primary": "#1a1a1a", "text_secondary": "#666666",
-        "accent": "#0078d4", "accent_hover": "#106ebe",
-        "danger": "#d13438", "success": "#107c10", "warning": "#ff8c00",
-        "divider": "#e0e0e0",
+        "bg": "#faf9f5",              # canvas 奶油画布
+        "card_bg": "#efe9de",         # surface-card 浅奶油卡片
+        "card_border": "#e6dfd8",     # hairline 细线
+        "text_primary": "#141413",    # ink 暖墨黑
+        "text_secondary": "#6c6a64",  # muted 柔灰
+        "accent": "#cc785c",          # primary 珊瑚红
+        "accent_hover": "#a9583e",    # primary-active
+        "danger": "#c64545",          # error
+        "success": "#5db872",         # success 绿
+        "warning": "#d4a017",         # warning
+        "divider": "#ebe6df",         # hairline-soft
+        "surface_soft": "#f5f0e8",    # surface-soft
+        "surface_dark": "#181715",    # surface-dark 深海军蓝
+        "on_dark": "#faf9f5",         # on-dark
     }
 
+    # ── 深色模式：深海军蓝 ── #
     _DARK = {
-        "bg": "#1a1a1a", "card_bg": "#2d2d2d", "card_border": "#3d3d3d",
-        "text_primary": "#ffffff", "text_secondary": "#aaaaaa",
-        "accent": "#60cdff", "accent_hover": "#0078d4",
-        "danger": "#ff6b6b", "success": "#6ccb5f", "warning": "#ffb84d",
-        "divider": "#3d3d3d",
+        "bg": "#181715",              # surface-dark
+        "card_bg": "#252320",         # surface-dark-elevated
+        "card_border": "#3d3a35",     # 深色细线
+        "text_primary": "#faf9f5",    # on-dark 奶油白
+        "text_secondary": "#a09d96",  # on-dark-soft
+        "accent": "#cc785c",          # 珊瑚红（深浅一致）
+        "accent_hover": "#a9583e",
+        "danger": "#e07070",
+        "success": "#6ccb5f",
+        "warning": "#e8a55a",
+        "divider": "#2f2c28",
+        "surface_soft": "#1f1e1b",    # surface-dark-soft
+        "surface_dark": "#181715",
+        "on_dark": "#faf9f5",
     }
 
     @classmethod
@@ -212,29 +235,29 @@ class Win11Style:
 
     @classmethod
     def widget_colors(cls) -> dict[str, str]:
-        """小组件内文字/标签颜色（适配明暗主题）"""
+        """桌面小组件内文字/标签颜色"""
         if cls.is_dark():
             return {
-                "title": "rgba(255,255,255,0.55)",
-                "text": "rgba(255,255,255,0.85)",
-                "text_secondary": "rgba(255,255,255,0.45)",
-                "text_dim": "rgba(255,255,255,0.30)",
-                "accent": "#60cdff",
-                "bg_input": "rgba(255,255,255,0.06)",
-                "border_input": "rgba(255,255,255,0.08)",
-                "separator": "rgba(255,255,255,0.08)",
-                "track": "rgba(255,255,255,0.12)",
+                "title": "rgba(250,249,245,0.55)",
+                "text": "rgba(250,249,245,0.85)",
+                "text_secondary": "rgba(250,249,245,0.45)",
+                "text_dim": "rgba(250,249,245,0.30)",
+                "accent": "#cc785c",
+                "bg_input": "rgba(250,249,245,0.06)",
+                "border_input": "rgba(250,249,245,0.08)",
+                "separator": "rgba(250,249,245,0.08)",
+                "track": "rgba(250,249,245,0.12)",
             }
         return {
-            "title": "rgba(0,0,0,0.45)",
-            "text": "rgba(0,0,0,0.85)",
-            "text_secondary": "rgba(0,0,0,0.45)",
-            "text_dim": "rgba(0,0,0,0.25)",
-            "accent": "#0078d4",
-            "bg_input": "rgba(0,0,0,0.04)",
-            "border_input": "rgba(0,0,0,0.08)",
-            "separator": "rgba(0,0,0,0.06)",
-            "track": "rgba(0,0,0,0.08)",
+            "title": "rgba(20,20,19,0.45)",
+            "text": "rgba(20,20,19,0.85)",
+            "text_secondary": "rgba(20,20,19,0.45)",
+            "text_dim": "rgba(20,20,19,0.25)",
+            "accent": "#cc785c",
+            "bg_input": "rgba(20,20,19,0.04)",
+            "border_input": "#e6dfd8",
+            "separator": "#ebe6df",
+            "track": "rgba(20,20,19,0.08)",
         }
 
     @classmethod
@@ -242,9 +265,10 @@ class Win11Style:
         c = cls.c()
         label = QLabel(text)
         label.setStyleSheet(
-            f"font-family:{cls.FONT_FAMILY};font-size:14px;"
-            f"font-weight:600;color:{c['text_primary']};"
+            f"font-family:{cls.FONT_SERIF};font-size:18px;"
+            f"font-weight:400;color:{c['text_primary']};"
             f"background:transparent;padding:8px 0 4px 0;"
+            f"letter-spacing:-0.5px;"
         )
         return label
 
@@ -299,9 +323,8 @@ class DesktopWidgetWindow(QWidget):
             self.setStyleSheet("background: transparent;")
             self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         else:
-            dark = isDarkTheme()
-            bg = "#2c2c2c" if dark else "#f3f3f3"
-            self.setStyleSheet(f"background: {bg}; border-radius: {self.CORNER_RADIUS}px;")
+            # 不在 stylesheet 设背景 — 由 paintEvent 统一绘制奶油色卡片
+            self.setStyleSheet("background: transparent;")
 
         # 默认尺寸
         if self._info.size_override:
@@ -328,7 +351,7 @@ class DesktopWidgetWindow(QWidget):
             self._content.setStyleSheet("background: transparent;")
         else:
             self._content.setStyleSheet("#dwContent { background: transparent; }")
-        margin = (0, 0, 0, 0) if self._is_frameless else (12, 8, 12, 12)
+        margin = (0, 0, 0, 0) if self._is_frameless else (10, 10, 10, 10)
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(*margin)
         self._content_layout.setSpacing(0)
@@ -358,28 +381,23 @@ class DesktopWidgetWindow(QWidget):
 
         w, h = self.width(), self.height()
         r = self.CORNER_RADIUS
-        dark = isDarkTheme()
+        c = Win11Style.c()
 
-        # ── 主卡片（从 0,0 开始绘制，不留边距）──
+        # ── 主卡片：奶油色卡片 + 细线边框 ──
         path = QPainterPath()
         path.addRoundedRect(QRectF(0, 0, w, h), r, r)
 
         if self._custom_color:
             bg = self._custom_color
-        elif dark:
-            bg = QColor(44, 44, 44)
         else:
-            bg = QColor(243, 243, 243)
+            bg = QColor(c["card_bg"])
 
         painter.setClipPath(path)
         painter.fillPath(path, QBrush(bg))
 
-        # ── 边框 ──
+        # ── 细线边框（hairline）──
         painter.setClipPath(QPainterPath())
-        if dark:
-            border_color = QColor(255, 255, 255, 25)
-        else:
-            border_color = QColor(0, 0, 0, 18)
+        border_color = QColor(c["card_border"])
         border_pen = QPen(border_color)
         border_pen.setWidthF(self.BORDER_WIDTH)
         painter.strokePath(path, border_pen)
@@ -725,8 +743,8 @@ class DesktopWidgetWindow(QWidget):
                 else:
                     label = QLabel(f"小组件: {self._info.name}\nID: {self._info.id}")
                     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("background:transparent;color:rgba(255,255,255,220);"
-                                        "font-family:Microsoft YaHei UI, Segoe UI, sans-serif;")
+                    label.setStyleSheet("background:transparent;color:rgba(20,20,19,220);"
+                                        f"font-family:{Win11Style.FONT_SANS};")
                     self._content_layout.addWidget(label)
 
             if self._is_frameless:
@@ -735,7 +753,7 @@ class DesktopWidgetWindow(QWidget):
             logger.warning("加载小组件内容失败: {}", e)
             label = QLabel(f"加载失败: {e}")
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            label.setStyleSheet("color:#ff6b6b;background:transparent;")
+            label.setStyleSheet("color:#c64545;background:transparent;")
             self._content_layout.addWidget(label)
 
     # ------------------------------------------------------------------ #

@@ -287,11 +287,8 @@
             "icon_name": "DOCUMENT",
             "size": "large",
             "category": "工具",
-            "is_active": true,
-            "position": [
-                704,
-                398
-            ],
+            "is_active": false,
+            "position": null,
             "size_override": [
                 300,
                 300

@@ -83,9 +83,138 @@ def main():
         default_font = QFont(custom_font_family, 10)
         app.setFont(default_font)
 
-    # 设置全局主题
-    setTheme(qconfig.themeMode.value)
-    qconfig.themeChanged.connect(lambda theme: setTheme(theme))
+    # 设置全局主题 — 强制浅色（Claude 奶油画布风格）
+    setTheme(Theme.LIGHT)
+    qconfig.themeChanged.connect(lambda theme: setTheme(Theme.LIGHT))  # 始终保持浅色
+
+    # ── Claude 设计系统全局 QSS ──
+    app.setStyleSheet("""
+        /* 奶油画布背景 */
+        QWidget {
+            background-color: #faf9f5;
+            font-family: "Segoe UI Variable", "Segoe UI", Inter, sans-serif;
+            color: #141413;
+        }
+        /* 滚动区域透明 */
+        QScrollArea, QScrollArea > QWidget > QWidget {
+            background-color: transparent;
+        }
+        /* 卡片 */
+        QFrame#homeView, QFrame#widgetsView, QFrame#settingsView,
+        QFrame#pluginView, QFrame#groupsView {
+            background-color: #faf9f5;
+        }
+        /* 主按钮 — 黑色 */
+        QPushButton {
+            background-color: #141413;
+            color: #faf9f5;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        QPushButton:hover {
+            background-color: #252523;
+        }
+        QPushButton:pressed {
+            background-color: #252523;
+        }
+        QPushButton:disabled {
+            background-color: #e6dfd8;
+            color: #6c6a64;
+        }
+        /* 次要按钮 */
+        QPushButton[flat="true"] {
+            background-color: transparent;
+            color: #141413;
+            border: 1px solid #e6dfd8;
+        }
+        QPushButton[flat="true"]:hover {
+            background-color: #efe9de;
+        }
+        /* 输入框 */
+        QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {
+            background-color: #ffffff;
+            color: #141413;
+            border: 1px solid #e6dfd8;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
+        QSpinBox:focus, QComboBox:focus {
+            border: 2px solid #cc785c;
+            padding: 7px 11px;
+        }
+        /* 标题 — 衬线字体 */
+        QLabel[heading="true"] {
+            font-family: Georgia, Cambria, "Times New Roman", serif;
+            font-weight: 400;
+            letter-spacing: -0.5px;
+            color: #141413;
+        }
+        /* 次要文字 */
+        QLabel[caption="true"] {
+            color: #6c6a64;
+            font-size: 13px;
+        }
+        /* 分隔线 */
+        QFrame[separator="true"] {
+            background-color: #e6dfd8;
+            max-height: 1px;
+        }
+        /* 菜单 */
+        QMenu {
+            background-color: #ffffff;
+            border: 1px solid #e6dfd8;
+            border-radius: 8px;
+            padding: 4px;
+        }
+        QMenu::item {
+            padding: 8px 24px;
+            border-radius: 6px;
+            color: #141413;
+        }
+        QMenu::item:selected {
+            background-color: #efe9de;
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: #e6dfd8;
+            margin: 4px 8px;
+        }
+        /* 滚动条 */
+        QScrollBar:vertical {
+            background: transparent;
+            width: 6px;
+            margin: 0;
+        }
+        QScrollBar::handle:vertical {
+            background: rgba(20,20,19,0.15);
+            border-radius: 3px;
+            min-height: 30px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: rgba(20,20,19,0.25);
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0;
+        }
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 6px;
+            margin: 0;
+        }
+        QScrollBar::handle:horizontal {
+            background: rgba(20,20,19,0.15);
+            border-radius: 3px;
+            min-width: 30px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0;
+        }
+    """)
 
     # 解析参数
     url_arg, is_autostart, import_path = _parse_args()

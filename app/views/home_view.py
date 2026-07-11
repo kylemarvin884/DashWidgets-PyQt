@@ -53,7 +53,8 @@ class _StatCard(CardWidget):
 
         self._value_label = StrongBodyLabel(self._value)
         self._value_label.setStyleSheet(
-            f"font-size:24px;font-weight:700;color:{c['text_primary']};background:transparent;"
+            f"font-family:{Win11Style.FONT_SERIF};font-size:28px;font-weight:400;"
+            f"letter-spacing:-0.3px;color:{c['text_primary']};background:transparent;"
         )
         lay.addWidget(self._value_label)
 
@@ -107,7 +108,7 @@ class _ActiveChip(CardWidget):
         dot = QLabel()
         dot.setFixedSize(8, 8)
         dot.setStyleSheet(
-            "background:#4ecb71;border-radius:4px;border:none;"
+            "background:#5db872;border-radius:4px;border:none;"
         )
         lay.addWidget(dot)
 
@@ -167,8 +168,8 @@ class _RankRow(QWidget):
         if self._w.is_active:
             active_lbl = CaptionLabel("启用中")
             active_lbl.setStyleSheet(
-                "color:#4ecb71;background:transparent;font-size:10px;padding:1px 6px;"
-                "border:1px solid #4ecb71;border-radius:6px;"
+                "color:#5db872;background:transparent;font-size:10px;padding:1px 6px;"
+                "border:1px solid #5db872;border-radius:6px;"
             )
             name_lay.addWidget(active_lbl)
         name_lay.addStretch()
@@ -255,11 +256,12 @@ class HomeView(QFrame):
         cl.setContentsMargins(36, 28, 36, 28)
         cl.setSpacing(20)
 
-        # ── 标题 ──
+        # ── 标题（衬线 display）──
         title = StrongBodyLabel("主页")
         title.setStyleSheet(
-            f"font-family:{Win11Style.FONT_FAMILY};font-size:28px;"
-            f"font-weight:700;color:{Win11Style.c()['text_primary']};background:transparent;"
+            f"font-family:{Win11Style.FONT_SERIF};font-size:36px;"
+            f"font-weight:400;letter-spacing:-0.5px;"
+            f"color:{Win11Style.c()['text_primary']};background:transparent;"
         )
         cl.addWidget(title)
 
@@ -305,7 +307,7 @@ class HomeView(QFrame):
         hdr.addWidget(icon_lbl)
 
         t = StrongBodyLabel("已启用的组件")
-        t.setStyleSheet(f"font-size:16px;color:{c['text_primary']};background:transparent;")
+        t.setStyleSheet(f"font-family:{Win11Style.FONT_SERIF};font-size:18px;font-weight:400;color:{c['text_primary']};background:transparent;")
         hdr.addWidget(t)
         hdr.addStretch()
 
@@ -334,7 +336,7 @@ class HomeView(QFrame):
         hdr.addWidget(icon_lbl)
 
         t = StrongBodyLabel("使用排行")
-        t.setStyleSheet(f"font-size:18px;font-weight:700;color:{c['text_primary']};background:transparent;")
+        t.setStyleSheet(f"font-family:{Win11Style.FONT_SERIF};font-size:22px;font-weight:400;letter-spacing:-0.3px;color:{c['text_primary']};background:transparent;")
         hdr.addWidget(t)
         hdr.addStretch()
 
