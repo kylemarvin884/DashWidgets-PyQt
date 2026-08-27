@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QScrollArea,
-    QTextEdit, QFileDialog, QMenu,
+    QTextEdit, QFileDialog,
 )
 
 from qfluentwidgets import FluentIcon as FIF
@@ -46,6 +46,9 @@ class DocumentViewerWidget(WidgetBase):
         # 文本显示区
         self._text_edit = QTextEdit(self)
         self._text_edit.setReadOnly(True)
+        # 内建右键菜单会继承窗口透明样式渲染成黑底；禁用后右键
+        # 传播到窗口统一菜单（全选/复制作为组件动作贡献）
+        self._text_edit.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._text_edit.setFont(QFont("Segoe UI Variable", 11))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{"
@@ -96,12 +99,14 @@ class DocumentViewerWidget(WidgetBase):
             self._choose_document()
         super().mousePressEvent(event)
 
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-        menu.addAction(FIF.DOCUMENT.icon(), "更换文档", self._choose_document)
+    def get_context_menu_actions(self) -> list[tuple]:
+        """组件专属右键动作（由窗口统一菜单渲染，避免自建 QMenu 黑底）"""
+        actions = [(FIF.DOCUMENT, "更换文档", self._choose_document)]
         if self._doc_path:
-            menu.addAction(FIF.DELETE.icon(), "清除文档", self._clear_document)
-        menu.exec(event.globalPos())
+            actions.append((FIF.DELETE, "清除文档", self._clear_document))
+            actions.append((None, "全选", self._text_edit.selectAll))
+            actions.append((None, "复制选中", self._text_edit.copy))
+        return actions
 
     def _clear_document(self) -> None:
         self._doc_path = ""

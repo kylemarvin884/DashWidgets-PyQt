@@ -62,3 +62,13 @@ class WidgetBase(QWidget):
 
     def on_settings_changed(self, settings: dict[str, Any]) -> None:
         """设置变更时调用"""
+
+    def get_context_menu_actions(self) -> list[tuple]:
+        """向窗口统一右键菜单贡献组件专属动作（子类可选重写）。
+
+        返回 [(icon, label, callback), ...]；icon 为 FluentIcon 枚举或
+        None（无图标）。动作会渲染在「组件设置 / 窗口层级 …」等系统
+        菜单项之前，由窗口菜单统一提供主题样式——不要在组件里自建
+        QMenu（会继承透明样式而渲染成黑底）。
+        """
+        return []

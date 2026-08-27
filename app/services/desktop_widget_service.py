@@ -541,7 +541,8 @@ class DesktopWidgetWindow(QWidget):
                 _make_fully_transparent(hwnd)
                 QTimer.singleShot(50, lambda: _make_fully_transparent(_get_window_handle(self)))
 
-    def contextMenuEvent(self, event):
+    def _build_context_menu(self) -> tuple:
+        """构建统一右键菜单（组件专属动作 + 系统项），返回 (menu, actions)"""
         from PySide6.QtWidgets import QMenu
         c = Win11Style.c()
 
@@ -582,6 +583,28 @@ class DesktopWidgetWindow(QWidget):
 
         act_settings = menu.addAction("组件设置...")
 
+        # 组件贡献的专属动作（合并进统一菜单，避免组件自建 QMenu 出现黑底）
+        widget_actions: list[tuple] = []
+        if self._widget_instance and hasattr(self._widget_instance, "get_context_menu_actions"):
+            try:
+                widget_actions = self._widget_instance.get_context_menu_actions() or []
+            except Exception:
+                logger.exception("获取组件右键动作异常: {}", self._info.id)
+
+        for entry in widget_actions:
+            try:
+                icon, text, callback = entry
+                if icon is not None:
+                    # FluentIcon / QIcon 均可：先转 QIcon 走原生重载
+                    qicon = icon.icon() if hasattr(icon, "icon") else icon
+                    menu.addAction(qicon, text, callback)
+                else:
+                    menu.addAction(text, callback)
+            except Exception:
+                logger.exception("注册组件右键动作异常: {}", entry)
+        if widget_actions:
+            menu.addSeparator()
+
         level_menu = menu.addMenu("窗口层级")
         act_top = level_menu.addAction("置顶显示")
         act_top.setCheckable(True)
@@ -599,9 +622,24 @@ class DesktopWidgetWindow(QWidget):
         act_click.setChecked(self._click_through)
 
         menu.addSeparator()
-        act_close = menu.addAction("关闭小组件")
+        menu.addAction("关闭小组件")
 
+        actions = {
+            "settings": act_settings,
+            "top": act_top,
+            "normal": act_normal,
+            "bottom": act_bottom,
+            "click_through": act_click,
+        }
+        return menu, actions
+
+    def contextMenuEvent(self, event):
+        menu, actions = self._build_context_menu()
         selected = menu.exec(event.globalPos())
+
+        act_settings = actions["settings"]
+        act_top, act_normal = actions["top"], actions["normal"]
+        act_bottom, act_click = actions["bottom"], actions["click_through"]
 
         if selected == act_settings:
             self._open_appearance_dialog()

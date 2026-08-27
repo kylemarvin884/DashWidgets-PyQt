@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImageReader, QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
-    QFileDialog, QMenu,
+    QFileDialog,
 )
 
 from qfluentwidgets import FluentIcon as FIF
@@ -118,12 +118,12 @@ class ImageWidget(WidgetBase):
         super().resizeEvent(event)
         self._fit_image()
 
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-        menu.addAction(FIF.PHOTO.icon(), "更换图片", self._choose_image)
+    def get_context_menu_actions(self) -> list[tuple]:
+        """组件专属右键动作（由窗口统一菜单渲染，避免自建 QMenu 黑底）"""
+        actions = [(FIF.PHOTO, "更换图片", self._choose_image)]
         if self._image_path:
-            menu.addAction(FIF.DELETE.icon(), "清除图片", self._clear_image)
-        menu.exec(event.globalPos())
+            actions.append((FIF.DELETE, "清除图片", self._clear_image))
+        return actions
 
     def _clear_image(self) -> None:
         c = Win11Style.widget_colors()
