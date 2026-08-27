@@ -67,6 +67,7 @@ class TimerRing(QWidget):
         self._phase = "work"
         self._running = False
         self.setStyleSheet("background: transparent;")
+        self._text_font = QFont("Segoe UI Variable", 16, QFont.Weight.Light)  # 只建一次
 
     def set_state(self, progress: float, text: str, phase: str, running: bool) -> None:
         self._progress = progress
@@ -102,8 +103,7 @@ class TimerRing(QWidget):
             p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), 90 * 16, span)
 
         # 中心文字
-        font = QFont("Segoe UI Variable", 16, QFont.Weight.Light)
-        p.setFont(font)
+        p.setFont(self._text_font)
         p.setPen(QColor(c["text"]))
         p.drawText(QRectF(cx - 28, cy - 12, 56, 24), Qt.AlignmentFlag.AlignCenter, self._text)
         p.end()

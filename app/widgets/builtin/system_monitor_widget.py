@@ -1,9 +1,7 @@
-"""系统监控小组件 — 现代进度条风格"""
+"""系统监控小组件 — 现代进度条风格（指标由后台采样服务推送）"""
 from __future__ import annotations
 
-import psutil
-
-from PySide6.QtCore import Qt, QTimer, QRectF
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import (
     QPainter, QPen, QColor, QFont, QLinearGradient, QBrush,
 )
@@ -24,6 +22,10 @@ class _StatBar(QWidget):
         self._sub_text = ""
         self.setFixedHeight(48)
         self.setStyleSheet("background: transparent;")
+        # 字体只创建一次（paint 每次触发都新建 QFont 是无谓分配）
+        self._label_font = QFont("Segoe UI Variable", 10, QFont.Weight.Normal)
+        self._pct_font = QFont("Segoe UI Variable", 14, QFont.Weight.DemiBold)
+        self._sub_font = QFont("Segoe UI Variable", 8, QFont.Weight.Light)
 
     def set_value(self, value: float, sub_text: str = "") -> None:
         self._value = max(0.0, min(1.0, value))
@@ -36,20 +38,17 @@ class _StatBar(QWidget):
         c = Win11Style.widget_colors()
 
         w = self.width()
-        h = self.height()
         bar_h = 6
         bar_y = 26
-        bar_x = 12
-        bar_w = w - 24
 
         # 标签
-        p.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Normal))
+        p.setFont(self._label_font)
         p.setPen(QColor(c["text"]))
-        p.drawText(QRectF(bar_x, 0, 50, 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+        p.drawText(QRectF(12, 0, 50, 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    self._label)
 
         # 百分比
-        p.setFont(QFont("Segoe UI Variable", 14, QFont.Weight.DemiBold))
+        p.setFont(self._pct_font)
         pct = f"{int(self._value * 100)}%"
         pct_w = 50
         p.drawText(QRectF(w - 12 - pct_w, -2, pct_w, 22),
@@ -57,7 +56,7 @@ class _StatBar(QWidget):
 
         # 副文本
         if self._sub_text:
-            p.setFont(QFont("Segoe UI Variable", 8, QFont.Weight.Light))
+            p.setFont(self._sub_font)
             p.setPen(QColor(c["accent"]))
             p.drawText(QRectF(w - 12 - pct_w, 20, pct_w, 12),
                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self._sub_text)
@@ -96,7 +95,7 @@ class SystemMonitorWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._setup_ui()
-        self._start_timers()
+        self._connect_stats_service()
 
     def _setup_ui(self) -> None:
         c = Win11Style.widget_colors()
@@ -122,25 +121,24 @@ class SystemMonitorWidget(WidgetBase):
         self._disk_bar = _StatBar("磁盘", self.DISK_COLOR, self)
         main_layout.addWidget(self._disk_bar)
 
-    def _start_timers(self) -> None:
-        timer = QTimer(self)
-        timer.timeout.connect(self._update_stats)
-        timer.start(2000)
-        self._update_stats()
+    def _connect_stats_service(self) -> None:
+        """订阅后台采样服务（psutil 不再占用 UI 线程）"""
+        from app.services.system_stats_service import get_system_stats_service
+        self._stats_svc = get_system_stats_service()
+        self._stats_svc.system_stats.connect(self._on_stats)
+        self._stats_svc.acquire_system()
 
-    def _update_stats(self) -> None:
+    def _on_stats(self, s: dict) -> None:
+        freq_str = f"{s['cpu_ghz']:.1f} GHz" if s["cpu_ghz"] > 0 else ""
+        self._cpu_bar.set_value(s["cpu"] / 100, sub_text=freq_str)
+        self._mem_bar.set_value(s["mem_percent"] / 100,
+                                f"{s['mem_used_gb']:.1f}/{s['mem_total_gb']:.0f} GB")
+        self._disk_bar.set_value(s["disk_percent"] / 100,
+                                 f"{s['disk_used_gb']:.0f}/{s['disk_total_gb']:.0f} GB")
+
+    def on_close(self) -> None:
         try:
-            cpu = psutil.cpu_percent(interval=None)
-            mem = psutil.virtual_memory()
-            disk = psutil.disk_usage("/")
-
-            freq = psutil.cpu_freq()
-            freq_str = f"{freq.current / 1000:.1f} GHz" if freq and freq.current else ""
-
-            self._cpu_bar.set_value(cpu / 100, sub_text=freq_str)
-            self._mem_bar.set_value(mem.percent / 100,
-                                    f"{mem.used / 1024**3:.1f}/{mem.total / 1024**3:.0f} GB")
-            self._disk_bar.set_value(disk.percent / 100,
-                                     f"{disk.used / 1024**3:.0f}/{disk.total / 1024**3:.0f} GB")
+            self._stats_svc.system_stats.disconnect(self._on_stats)
+            self._stats_svc.release_system()
         except Exception:
             pass

@@ -424,6 +424,19 @@ class ThreadPage(_DebugBasePage):
 class LogPage(_DebugBasePage):
     """日志页：带级别筛选、搜索、正则、大小写敏感、导出、自动刷新"""
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 轮询仅在页面可见时进行，避免后台空转
+        self._poll_timer.start(200)
+        if getattr(self, "_auto_was_active", False):
+            self._auto_timer.start()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._auto_was_active = self._auto_timer.isActive()
+        self._poll_timer.stop()
+        self._auto_timer.stop()
+
     _LEVEL_COLOR = {
         "TRACE": "#888888",
         "DEBUG": "#888888",
@@ -467,10 +480,9 @@ class LogPage(_DebugBasePage):
 
         self._root.addStretch()
 
-        # 轮询定时器
+        # 轮询定时器（仅页面可见时运行，见 showEvent/hideEvent）
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_logs)
-        self._poll_timer.start(200)
 
         # 自动刷新定时器（可选）
         self._auto_timer = QTimer(self)
@@ -791,6 +803,16 @@ class ServicesPage(_DebugBasePage):
 class ToolsPage(_DebugBasePage):
     """工具页：性能信息、快速操作"""
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 性能信息采样仅在页面可见时进行
+        self._perf_timer.start()
+        self._update_perf()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._perf_timer.stop()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("debugToolsPage")
@@ -803,8 +825,7 @@ class ToolsPage(_DebugBasePage):
         perf_l.addWidget(self._perf_lbl)
         self._perf_timer = QTimer(self)
         self._perf_timer.timeout.connect(self._update_perf)
-        self._perf_timer.start(2000)
-        self._update_perf()
+        self._perf_timer.setInterval(2000)  # 仅页面可见时运行，见 showEvent/hideEvent
 
         # 应用信息
         _, info_l = self._add_card("应用信息")

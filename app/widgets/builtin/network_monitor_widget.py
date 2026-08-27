@@ -1,9 +1,11 @@
-"""网络监控小组件 — Win11 风格"""
+"""网络监控小组件 — Win11 风格（指标由后台采样服务推送）"""
 from __future__ import annotations
-import psutil
 
-from PySide6.QtCore import Qt, QTimer, QPointF, QRectF
-from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QLinearGradient, QPainterPath, QRadialGradient, QFontMetrics
+from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtGui import (
+    QPainter, QPen, QBrush, QColor, QFont, QPainterPath,
+    QRadialGradient, QFontMetrics,
+)
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 from app.widgets.base_widget import WidgetBase, WidgetConfig
@@ -12,6 +14,7 @@ from app.services.desktop_widget_service import Win11Style
 
 class SpeedIndicator(QWidget):
     """速度指示器（主题感知）"""
+
     def __init__(self, direction: str, parent=None):
         super().__init__(parent)
         self._dir = direction
@@ -19,6 +22,21 @@ class SpeedIndicator(QWidget):
         self._speed_text = "0 KB/s"
         self.setFixedHeight(40)
         self.setStyleSheet("background: transparent;")
+        # 字体/路径只建一次，避免每次 paint 重复分配
+        self._label_font = QFont("Segoe UI Variable", 9, QFont.Weight.Normal)
+        self._speed_font = QFont("Segoe UI Variable", 14, QFont.Weight.Light)
+        self._unit_font = QFont("Segoe UI Variable", 9, QFont.Weight.Light)
+
+        self._up_tri = QPainterPath()
+        self._up_tri.moveTo(-4, 3)
+        self._up_tri.lineTo(4, 3)
+        self._up_tri.lineTo(0, -5)
+        self._up_tri.closeSubpath()
+        self._dn_tri = QPainterPath()
+        self._dn_tri.moveTo(-4, -3)
+        self._dn_tri.lineTo(4, -3)
+        self._dn_tri.lineTo(0, 5)
+        self._dn_tri.closeSubpath()
 
     def set_speed(self, bytes_per_sec: float) -> None:
         self._speed = bytes_per_sec
@@ -49,32 +67,23 @@ class SpeedIndicator(QWidget):
         p.drawEllipse(QPointF(icon_cx, icon_cy), 12, 12)
 
         p.setBrush(QBrush(arrow_color))
+        p.save()
+        p.translate(icon_cx, icon_cy)
         if self._dir == "up":
-            tri = QPainterPath()
-            tri.moveTo(icon_cx - 4, icon_cy + 3)
-            tri.lineTo(icon_cx + 4, icon_cy + 3)
-            tri.lineTo(icon_cx, icon_cy - 5)
-            tri.closeSubpath()
-            p.drawPath(tri)
-            p.drawRect(int(icon_cx - 2), int(icon_cy + 3), 3, 5)
+            p.drawPath(self._up_tri)
+            p.drawRect(-2, 3, 3, 5)
         else:
-            tri = QPainterPath()
-            tri.moveTo(icon_cx - 4, icon_cy - 3)
-            tri.lineTo(icon_cx + 4, icon_cy - 3)
-            tri.lineTo(icon_cx, icon_cy + 5)
-            tri.closeSubpath()
-            p.drawPath(tri)
-            p.drawRect(int(icon_cx - 2), int(icon_cy - 8), 3, 5)
+            p.drawPath(self._dn_tri)
+            p.drawRect(-2, -8, 3, 5)
+        p.restore()
 
         # 文字区域（从 x=30 开始，留更多右侧空间）
         tx = 30
 
         # 标签行：UP / DN
-        label_str = "UP" if self._dir == "up" else "DN"
-        label_font = QFont("Segoe UI Variable", 9, QFont.Weight.Normal)
-        p.setFont(label_font)
+        p.setFont(self._label_font)
         p.setPen(QColor(c["text_secondary"]))
-        p.drawText(QPointF(tx, h // 2 - 6), label_str)
+        p.drawText(QPointF(tx, h // 2 - 6), "UP" if self._dir == "up" else "DN")
 
         # 数值行：数字 + 单位（缩小字体避免小数部分被裁剪）
         if self._speed < 1024 * 1024:
@@ -84,15 +93,12 @@ class SpeedIndicator(QWidget):
             num_str = f"{self._speed / (1024 * 1024):.1f}"
             unit_str = "MB/s"
 
-        speed_font = QFont("Segoe UI Variable", 14, QFont.Weight.Light)
-        p.setFont(speed_font)
+        p.setFont(self._speed_font)
         p.setPen(QColor(c["text"]))
-        num_fm = QFontMetrics(speed_font)
-        num_width = num_fm.horizontalAdvance(num_str)
+        num_width = QFontMetrics(self._speed_font).horizontalAdvance(num_str)
         p.drawText(QPointF(tx, h // 2 + 12), num_str)
 
-        unit_font = QFont("Segoe UI Variable", 9, QFont.Weight.Light)
-        p.setFont(unit_font)
+        p.setFont(self._unit_font)
         p.setPen(QColor(c["text_dim"]))
         p.drawText(QPointF(tx + num_width + 3, h // 2 + 11), unit_str)
 
@@ -105,10 +111,8 @@ class NetworkMonitorWidget(WidgetBase):
 
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
-        self._last_bytes_sent = 0
-        self._last_bytes_recv = 0
         self._setup_ui()
-        self._start_monitoring()
+        self._connect_stats_service()
 
     def _setup_ui(self) -> None:
         c = Win11Style.widget_colors()
@@ -147,30 +151,31 @@ class NetworkMonitorWidget(WidgetBase):
         main_layout.addLayout(dn_total_row)
         main_layout.addStretch()
 
-    def _start_monitoring(self) -> None:
-        try:
-            net = psutil.net_io_counters()
-            self._last_bytes_sent = net.bytes_sent
-            self._last_bytes_recv = net.bytes_recv
-        except Exception:
-            pass
-        timer = QTimer(self)
-        timer.timeout.connect(self._update_network)
-        timer.start(1500)
-        self._update_network()
+    def _connect_stats_service(self) -> None:
+        """订阅后台采样服务（psutil 不再占用 UI 线程）"""
+        from app.services.system_stats_service import get_system_stats_service
+        self._stats_svc = get_system_stats_service()
+        self._stats_svc.network_stats.connect(self._on_stats)
+        self._stats_svc.acquire_network()
 
-    def _update_network(self) -> None:
+    def _on_stats(self, s: dict) -> None:
+        self._upload_indicator.set_speed(s["up_bps"])
+        self._download_indicator.set_speed(s["down_bps"])
+
+        sent_gb = s["sent_bytes"] / (1024 ** 3)
+        recv_gb = s["recv_bytes"] / (1024 ** 3)
+        self._up_total_label.setText(
+            f"↑ 总计: {sent_gb:.2f} GB" if sent_gb >= 1
+            else f"↑ 总计: {s['sent_bytes'] / (1024 ** 2):.0f} MB"
+        )
+        self._dn_total_label.setText(
+            f"↓ 总计: {recv_gb:.2f} GB" if recv_gb >= 1
+            else f"↓ 总计: {s['recv_bytes'] / (1024 ** 2):.0f} MB"
+        )
+
+    def on_close(self) -> None:
         try:
-            net = psutil.net_io_counters()
-            upload_speed = max(0, net.bytes_sent - self._last_bytes_sent) / 1.5
-            download_speed = max(0, net.bytes_recv - self._last_bytes_recv) / 1.5
-            self._upload_indicator.set_speed(upload_speed)
-            self._download_indicator.set_speed(download_speed)
-            sent_gb = net.bytes_sent / (1024 ** 3)
-            recv_gb = net.bytes_recv / (1024 ** 3)
-            self._up_total_label.setText(f"↑ 总计: {sent_gb:.2f} GB" if sent_gb >= 1 else f"↑ 总计: {net.bytes_sent / (1024**2):.0f} MB")
-            self._dn_total_label.setText(f"↓ 总计: {recv_gb:.2f} GB" if recv_gb >= 1 else f"↓ 总计: {net.bytes_recv / (1024**2):.0f} MB")
-            self._last_bytes_sent = net.bytes_sent
-            self._last_bytes_recv = net.bytes_recv
+            self._stats_svc.network_stats.disconnect(self._on_stats)
+            self._stats_svc.release_network()
         except Exception:
             pass
