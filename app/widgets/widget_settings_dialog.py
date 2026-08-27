@@ -6,6 +6,10 @@
   2. 从 desktop_widget_service 右键菜单：传入 widget_id，实时推送
 
 所有设置变更立即生效（无保存按钮）。
+
+注意：本对话框可能以桌面组件窗口为父窗口，而组件窗口的 QSS 是
+``background: transparent``（样式表会沿父子链传播）。因此这里必须
+设置自己的样式表覆盖继承值，否则对话框背景渲染为黑色。
 """
 from __future__ import annotations
 from typing import Any, Optional
@@ -22,10 +26,11 @@ from qfluentwidgets import (
     CardWidget, SpinBox, DoubleSpinBox,
     ComboBox, StrongBodyLabel,
     LineEdit, ToolButton, FluentIcon as FIF,
-    Slider,
+    Slider, qconfig,
 )
 
 from app.models.widget_model import WidgetModel, WidgetInfo
+from app.services.desktop_widget_service import Win11Style
 
 
 class WidgetSettingsDialog(QDialog):
@@ -45,11 +50,42 @@ class WidgetSettingsDialog(QDialog):
         widget_name = self.widget_info.name if self.widget_info else widget_id
         self.setWindowTitle(f"设置 - {widget_name}")
         self.setMinimumWidth(450)
+        # 覆盖父窗口传播下来的 transparent 背景（否则对话框渲染为黑色）
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
+        )
 
         self._current_color: QColor = QColor("#FFFFFF")
 
         self._init_ui()
+        self._apply_theme()
+        qconfig.themeChanged.connect(self._apply_theme)
         self._load_settings()
+
+    def _apply_theme(self, _theme=None) -> None:
+        """主题感知样式：跟随浅色奶油/深色海军蓝设计系统"""
+        c = Win11Style.c()
+        self.setStyleSheet(f"""
+            WidgetSettingsDialog, QDialog {{
+                background-color: {c['bg']};
+            }}
+            QLabel, BodyLabel, StrongBodyLabel {{
+                color: {c['text_primary']};
+                background: transparent;
+            }}
+            QScrollArea {{
+                border: 1px solid {c['card_border']};
+                border-radius: 6px;
+                background: {c['surface_soft']};
+            }}
+            QScrollBar:vertical {{ width: 8px; background: transparent; }}
+            QScrollBar::handle:vertical {{
+                background: {c['card_border']}; border-radius: 4px; min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background: {c['text_secondary']}; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        """)
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -90,7 +126,21 @@ class WidgetSettingsDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _build_clock_settings(self, form_layout: QVBoxLayout) -> None:
-        """时钟专用设置：字体大小、文字颜色、透明度"""
+        """时钟专用设置：显示秒数、字体大小、文字颜色、透明度"""
+        # ── 显示秒数 ──
+        sec_row = QHBoxLayout()
+        sec_row.setSpacing(12)
+        sec_label = BodyLabel("显示秒数:")
+        sec_label.setMinimumWidth(80)
+        sec_row.addWidget(sec_label)
+        self._show_seconds_combo = ComboBox()
+        self._show_seconds_combo.addItems(["否", "是"])
+        self._show_seconds_combo.setMinimumWidth(200)
+        self._show_seconds_combo.currentIndexChanged.connect(lambda: self._apply_realtime())
+        sec_row.addWidget(self._show_seconds_combo)
+        sec_row.addStretch()
+        form_layout.addLayout(sec_row)
+
         # ── 字体大小滑块 ──
         fs_row = QHBoxLayout()
         fs_row.setSpacing(12)
@@ -218,16 +268,6 @@ class WidgetSettingsDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setMinimumHeight(150)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                background: white;
-            }
-            QScrollBar:vertical { width: 8px; background: transparent; }
-            QScrollBar::handle:vertical { background: #D1D5DB; border-radius: 4px; min-height: 20px; }
-            QScrollBar::handle:vertical:hover { background: #9CA3AF; }
-        """)
         self._shortcut_container = QWidget()
         self._shortcut_layout = QVBoxLayout(self._shortcut_container)
         self._shortcut_layout.setContentsMargins(8, 8, 8, 8)
@@ -257,6 +297,8 @@ class WidgetSettingsDialog(QDialog):
         d: dict[str, Any] = {}
 
         if self.widget_id == "clock":
+            if hasattr(self, '_show_seconds_combo'):
+                d["show_seconds"] = self._show_seconds_combo.currentIndex() == 1
             if hasattr(self, '_font_size_slider'):
                 d["font_size"] = self._font_size_slider.value()
             c = getattr(self, '_current_color', None)
@@ -316,6 +358,12 @@ class WidgetSettingsDialog(QDialog):
         settings: dict[str, Any] = self.widget_info.custom_settings or {}
 
         if self.widget_id == "clock":
+            # 显示秒数
+            if hasattr(self, '_show_seconds_combo'):
+                self._show_seconds_combo.setCurrentIndex(
+                    1 if settings.get("show_seconds", False) else 0
+                )
+
             # 字体大小
             if hasattr(self, '_font_size_slider'):
                 fs = settings.get("font_size", 52)
@@ -333,7 +381,7 @@ class WidgetSettingsDialog(QDialog):
                         f"border-radius: 4px; border:1px solid rgba(0,0,0,0.15);"
                     )
 
-            # 透明度
+            # 透明度（存储为 0-1 小数）
             op = settings.get("opacity", 1.0)
             self._opacity_spin.setValue(float(op) * 100)
         else:
@@ -350,9 +398,9 @@ class WidgetSettingsDialog(QDialog):
             if hasattr(self, '_radius_spin'):
                 self._radius_spin.setValue(settings.get("border_radius", 16))
 
-            # 透明度
+            # 透明度（存储为 0-1 小数，而非百分数）
             if hasattr(self, '_opacity_spin'):
-                self._opacity_spin.setValue(settings.get("opacity", 95))
+                self._opacity_spin.setValue(float(settings.get("opacity", 0.95)) * 100)
 
             # 阴影
             if hasattr(self, '_shadow_combo'):

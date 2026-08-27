@@ -331,7 +331,7 @@ class DesktopWidgetWindow(QWidget):
         if self._info.size_override:
             w, h = self._info.size_override
         elif self._info.id == "clock":
-            w, h = 160, 56
+            w, h = 170, 88  # 时间 + 日期两行
         else:
             w, h = 320, 220
         self.resize(w, h)
@@ -358,8 +358,11 @@ class DesktopWidgetWindow(QWidget):
         self._content_layout.setSpacing(0)
         main_layout.addWidget(self._content, 1)
 
-        # 拖拽光标（默认手形，鼠标移动时动态调整）
-        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+        # 拖拽光标：无边框组件整体可拖，默认手形；其余默认箭头，悬停时动态调整
+        if self._is_frameless:
+            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+        else:
+            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
         self.setMouseTracking(True)
 
         # Resize Handle
@@ -375,6 +378,11 @@ class DesktopWidgetWindow(QWidget):
 
     def paintEvent(self, event):
         if self._is_frameless:
+            # 分层窗口对 alpha=0 的像素做鼠标穿透命中，
+            # 补一层 alpha=1 的隐形底色让整个窗口区域都可以拖拽
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
+            painter.end()
             return
 
         painter = QPainter(self)
@@ -432,18 +440,21 @@ class DesktopWidgetWindow(QWidget):
                     return True
 
         # 无边框模式：子组件鼠标事件转发（实现拖拽）
+        # 注意：子组件事件的 position() 是其局部坐标，需换算到窗口坐标
         if self._is_frameless and watched is not self and watched is not self._resize_handle:
             etype = event.type()
             if etype == QEvent.Type.MouseButtonPress:
                 if event.button() == Qt.MouseButton.LeftButton:
-                    self.mousePressEvent(event)
+                    local = watched.mapTo(self, event.position().toPoint())
+                    self._begin_drag(event.globalPos(), local)
                     return True
             elif etype == QEvent.Type.MouseMove:
-                self.mouseMoveEvent(event)
-                return True
+                if self._dragging:
+                    self._update_drag(event.globalPos())
+                    return True
             elif etype == QEvent.Type.MouseButtonRelease:
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.mouseReleaseEvent(event)
+                if event.button() == Qt.MouseButton.LeftButton and self._dragging:
+                    self._end_drag()
                     return True
 
         return super().eventFilter(watched, event)
@@ -473,9 +484,7 @@ class DesktopWidgetWindow(QWidget):
             target = self.childAt(event.position().toPoint())
             if self._is_interactive_widget(target):
                 return
-            self._dragging = True
-            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
-            self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+            self._begin_drag(event.globalPos(), event.position().toPoint())
 
     def mouseMoveEvent(self, event):
         # 动态光标：交互控件上显示箭头，其他区域显示手形
@@ -486,13 +495,32 @@ class DesktopWidgetWindow(QWidget):
             self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
 
         if self._dragging and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPos() - self._drag_offset)
+            self._update_drag(event.globalPos())
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._dragging = False
-            self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
-            self._save_position()
+            if self._dragging:
+                self._end_drag()
+            else:
+                self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+
+    # ------------------------------------------------------------------ #
+    # 拖拽（窗口本体与子组件事件转发共用）
+    # ------------------------------------------------------------------ #
+
+    def _begin_drag(self, global_pos: QPoint, local_pos: QPoint) -> None:
+        """local_pos 为窗口坐标，用于避开可交互子控件（保留扩展点）"""
+        self._dragging = True
+        self._drag_offset = global_pos - self.frameGeometry().topLeft()
+        self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+
+    def _update_drag(self, global_pos: QPoint) -> None:
+        self.move(global_pos - self._drag_offset)
+
+    def _end_drag(self) -> None:
+        self._dragging = False
+        self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
+        self._save_position()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -701,14 +729,6 @@ class DesktopWidgetWindow(QWidget):
         if shadow_style:
             # 目前 Win11 风格无手绘阴影，仅记录设置
             pass
-
-        # 字体大小（传递给子组件）
-        font_size = settings.get("font_size")
-        if font_size is not None and self._widget_instance:
-            try:
-                self._widget_instance.on_settings_changed(settings)
-            except Exception:
-                pass
 
         click_through = settings.get("click_through")
         if click_through is not None:
