@@ -26,11 +26,12 @@ from qfluentwidgets import (
     CardWidget, SpinBox, DoubleSpinBox,
     ComboBox, StrongBodyLabel,
     LineEdit, ToolButton, FluentIcon as FIF,
-    Slider, qconfig,
+    Slider, qconfig, SwitchButton,
 )
 
 from app.models.widget_model import WidgetModel, WidgetInfo
 from app.services.desktop_widget_service import Win11Style
+from app.widgets.widget_options import get_widget_options
 
 
 class WidgetSettingsDialog(QDialog):
@@ -92,7 +93,7 @@ class WidgetSettingsDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        title = StrongBodyLabel("外观设置")
+        title = StrongBodyLabel("组件设置")
         layout.addWidget(title)
 
         form_card = CardWidget()
@@ -111,11 +112,26 @@ class WidgetSettingsDialog(QDialog):
             # ════════════════════════════════════
             self._build_general_settings(form_layout)
 
+        layout.addWidget(form_card)
+
+        # ════════════════════════════════════
+        #  信息显示（声明式选项，部分组件提供）
+        # ════════════════════════════════════
+        options = get_widget_options(self.widget_id)
+        if options:
+            info_card = CardWidget()
+            info_layout = QVBoxLayout(info_card)
+            info_layout.setContentsMargins(20, 20, 20, 20)
+            info_layout.setSpacing(14)
+
+            info_title = StrongBodyLabel("信息显示")
+            info_layout.addWidget(info_title)
+            self._build_display_options(info_layout, options)
+            layout.addWidget(info_card)
+
         # 快捷方式列表（仅快捷方式）
         if self.widget_id == "shortcut":
             self._build_shortcut_list(form_layout)
-
-        layout.addWidget(form_card)
 
         # 底部：只保留关闭按钮
         btn_layout = QHBoxLayout()
@@ -124,6 +140,83 @@ class WidgetSettingsDialog(QDialog):
         close_btn.clicked.connect(self.close)
         btn_layout.addWidget(close_btn)
         layout.addLayout(btn_layout)
+
+    # ------------------------------------------------------------------ #
+    # 信息显示选项（schema 驱动）
+    # ------------------------------------------------------------------ #
+
+    def _build_display_options(self, parent_layout: QVBoxLayout, options: list[dict]) -> None:
+        """按声明渲染开关/下拉/数字控件，全部实时生效"""
+        self._option_controls: dict[str, tuple[str, Any]] = {}
+
+        for opt in options:
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            label = BodyLabel(opt["label"])
+            label.setMinimumWidth(110)
+            row.addWidget(label)
+            row.addStretch()
+
+            kind = opt["type"]
+            if kind == "bool":
+                ctrl = SwitchButton()
+                ctrl.setChecked(bool(opt.get("default", False)))
+                ctrl.checkedChanged.connect(lambda _v: self._apply_realtime())
+                row.addWidget(ctrl)
+            elif kind == "choice":
+                ctrl = ComboBox()
+                for value, display in opt.get("choices", []):
+                    ctrl.addItem(display, userData=value)
+                ctrl.currentIndexChanged.connect(lambda _i: self._apply_realtime())
+                row.addWidget(ctrl)
+            elif kind == "int":
+                ctrl = SpinBox()
+                ctrl.setRange(int(opt.get("min", 0)), int(opt.get("max", 99)))
+                if opt.get("suffix"):
+                    ctrl.setSuffix(opt["suffix"])
+                ctrl.setValue(int(opt.get("default", 0)))
+                ctrl.valueChanged.connect(lambda _v: self._apply_realtime())
+                row.addWidget(ctrl)
+            else:
+                continue
+
+            parent_layout.addLayout(row)
+            self._option_controls[opt["key"]] = (kind, ctrl)
+
+    def _load_option_values(self, settings: dict) -> None:
+        """把已保存的设置值回填到信息显示控件"""
+        if not hasattr(self, "_option_controls"):
+            return
+        for key, (kind, ctrl) in self._option_controls.items():
+            value = settings.get(key)
+            if value is None:
+                continue
+            try:
+                if kind == "bool":
+                    ctrl.setChecked(bool(value))
+                elif kind == "choice":
+                    idx = ctrl.findData(value)
+                    if idx >= 0:
+                        ctrl.setCurrentIndex(idx)
+                elif kind == "int":
+                    ctrl.setValue(int(value))
+            except Exception:
+                pass
+
+    def _collect_option_values(self, settings: dict) -> None:
+        """把信息显示控件的当前值写入 settings"""
+        if not hasattr(self, "_option_controls"):
+            return
+        for key, (kind, ctrl) in self._option_controls.items():
+            try:
+                if kind == "bool":
+                    settings[key] = ctrl.isChecked()
+                elif kind == "choice":
+                    settings[key] = ctrl.currentData()
+                elif kind == "int":
+                    settings[key] = ctrl.value()
+            except Exception:
+                pass
 
     def _build_clock_settings(self, form_layout: QVBoxLayout) -> None:
         """时钟专用设置：显示秒数、字体大小、文字颜色、透明度"""
@@ -317,6 +410,9 @@ class WidgetSettingsDialog(QDialog):
             if hasattr(self, '_shadow_combo'):
                 d["shadow"] = self._shadow_combo.currentText()
 
+        # 信息显示选项（schema 驱动）
+        self._collect_option_values(d)
+
         return d
 
     def _push_to_widget(self, settings: dict) -> None:
@@ -408,6 +504,9 @@ class WidgetSettingsDialog(QDialog):
                 idx = self._shadow_combo.findText(sh)
                 if idx >= 0:
                     self._shadow_combo.setCurrentIndex(idx)
+
+        # 信息显示选项回填
+        self._load_option_values(settings)
 
         # 快捷方式
         if self.widget_id == "shortcut" and hasattr(self, '_shortcut_layout'):

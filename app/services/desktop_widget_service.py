@@ -580,7 +580,7 @@ class DesktopWidgetWindow(QWidget):
             QMenu::indicator {{ width: 16px; height: 16px; }}
         """)
 
-        act_settings = menu.addAction("外观设置...")
+        act_settings = menu.addAction("组件设置...")
 
         level_menu = menu.addMenu("窗口层级")
         act_top = level_menu.addAction("置顶显示")

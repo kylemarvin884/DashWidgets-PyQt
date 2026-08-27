@@ -54,11 +54,13 @@ class MusicWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._media_svc = None
+        self._show_artist = bool(config.settings.get("show_artist", True))
         self._manual_play_state: bool | None = None  # None=自动模式, True/False=手动锁定
         self._manual_timer = QTimer(self)  # 手动状态自动复位计时器
         self._manual_timer.setSingleShot(True)
         self._manual_timer.timeout.connect(self._reset_manual_state)
         self._setup_ui()
+        self._artist_label.setVisible(self._show_artist)
         self._connect_media_service()
 
     def _setup_ui(self) -> None:
@@ -205,6 +207,11 @@ class MusicWidget(WidgetBase):
         """下一曲"""
         if self._media_svc:
             self._media_svc.next_track()
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_artist" in settings:
+            self._show_artist = bool(settings["show_artist"])
+            self._artist_label.setVisible(self._show_artist)
 
     def on_close(self) -> None:
         try:

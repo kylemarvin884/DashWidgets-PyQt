@@ -22,7 +22,9 @@ class ExchangeWidget(WidgetBase):
         self._fetching = False
         self._task = None  # 持有后台任务信号对象，防止被 GC
         self._rate_labels: dict[str, QLabel] = {}
+        self._pair_rows: dict[str, QWidget] = {}
         self._setup_ui()
+        self._apply_visibility(settings=config.settings or {})
         self._refresh()
 
         self._refresh_timer = QTimer(self)
@@ -38,7 +40,9 @@ class ExchangeWidget(WidgetBase):
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         for code in _PAIRS:
-            row = QHBoxLayout()
+            row_w = QWidget(self)
+            row = QHBoxLayout(row_w)
+            row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(0)
             pair_lbl = QLabel(f"{code}/CNY")
             pair_lbl.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
@@ -50,7 +54,14 @@ class ExchangeWidget(WidgetBase):
             rate_lbl.setStyleSheet(f"color: {c['text']}; background: transparent;")
             row.addWidget(rate_lbl)
             self._rate_labels[code] = rate_lbl
-            main_layout.addLayout(row)
+            self._pair_rows[code] = row_w
+            main_layout.addWidget(row_w)
+
+    def _apply_visibility(self, settings: dict) -> None:
+        """按设置显示/隐藏各币种行"""
+        for code in _PAIRS:
+            show = bool(settings.get(f"show_{code.lower()}", True))
+            self._pair_rows[code].setVisible(show)
 
     def _refresh(self):
         """在后台线程获取汇率（网络请求阻塞，不能放 UI 线程）"""
@@ -79,6 +90,9 @@ class ExchangeWidget(WidgetBase):
                 lbl.setText(f"{rate:.4f}")
             else:
                 lbl.setText(f"{rate:.6f}")  # JPY 等小汇率多给两位精度
+
+    def on_settings_changed(self, settings: dict) -> None:
+        self._apply_visibility(settings)
 
     def on_close(self):
         self._refresh_timer.stop()

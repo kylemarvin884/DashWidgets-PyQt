@@ -112,7 +112,9 @@ class WeatherWidget(WidgetBase):
         super().__init__(config, services, parent)
         self._fetching = False
         self._task = None  # 持有后台任务信号对象，防止被 GC
+        self._show_detail = bool(config.settings.get("show_detail", True))
         self._setup_ui()
+        self._apply_detail_visibility()
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(30 * 60 * 1000)  # 30分钟
         self._refresh_timer.timeout.connect(self._fetch_weather)
@@ -143,8 +145,16 @@ class WeatherWidget(WidgetBase):
         self._temp_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         info_col.addWidget(self._temp_label)
 
+        self._detail_label = QLabel("湿度 -- · 风 --")
+        self._detail_label.setFont(QFont("Segoe UI Variable", 9, QFont.Weight.Light))
+        self._detail_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
+        info_col.addWidget(self._detail_label)
+
         main_layout.addLayout(info_col)
         main_layout.addStretch()
+
+    def _apply_detail_visibility(self) -> None:
+        self._detail_label.setVisible(self._show_detail)
 
     def _fetch_weather(self) -> None:
         """在工作线程获取天气数据（服务内部有缓存与并发去重）"""
@@ -169,9 +179,17 @@ class WeatherWidget(WidgetBase):
             self._icon.set_weather(wtype)
             self._desc_label.setText(data.condition)
             self._temp_label.setText(f"{data.temperature:.0f}℃")
+            self._detail_label.setText(
+                f"湿度 {data.humidity}% · 风 {data.wind_speed:.0f} km/h"
+            )
         else:
             self._desc_label.setText("获取失败")
             self._temp_label.setText("--℃")
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_detail" in settings:
+            self._show_detail = bool(settings["show_detail"])
+            self._apply_detail_visibility()
 
     def apply_settings(self, settings: dict) -> None:
         if "weather" in settings:

@@ -112,6 +112,7 @@ class NetworkMonitorWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._setup_ui()
+        self._apply_visibility(bool(config.settings.get("show_totals", True)))
         self._connect_stats_service()
 
     def _setup_ui(self) -> None:
@@ -132,6 +133,7 @@ class NetworkMonitorWidget(WidgetBase):
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background: {c['separator']};")
         main_layout.addWidget(sep)
+        self._separator = sep
 
         total_font = QFont("Segoe UI Variable", 10, QFont.Weight.ExtraLight)
         up_total_row = QHBoxLayout()
@@ -150,6 +152,12 @@ class NetworkMonitorWidget(WidgetBase):
         dn_total_row.addStretch()
         main_layout.addLayout(dn_total_row)
         main_layout.addStretch()
+
+    def _apply_visibility(self, show_totals: bool) -> None:
+        """按设置显示/隐藏累计流量区"""
+        self._separator.setVisible(show_totals)
+        self._up_total_label.setVisible(show_totals)
+        self._dn_total_label.setVisible(show_totals)
 
     def _connect_stats_service(self) -> None:
         """订阅后台采样服务（psutil 不再占用 UI 线程）"""
@@ -172,6 +180,10 @@ class NetworkMonitorWidget(WidgetBase):
             f"↓ 总计: {recv_gb:.2f} GB" if recv_gb >= 1
             else f"↓ 总计: {s['recv_bytes'] / (1024 ** 2):.0f} MB"
         )
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_totals" in settings:
+            self._apply_visibility(bool(settings["show_totals"]))
 
     def on_close(self) -> None:
         try:

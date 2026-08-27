@@ -85,6 +85,7 @@ class BatteryWidget(WidgetBase):
 
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
+        self._show_time = bool(config.settings.get("show_time", True))
         self._setup_ui()
         self._timer = QTimer(self)
         self._timer.setInterval(_POLL_MS)
@@ -125,6 +126,8 @@ class BatteryWidget(WidgetBase):
             self._ring.set_battery(float(battery.percent), plugged)
             if plugged:
                 self._status_label.setText("充电中")
+            elif not self._show_time:
+                self._status_label.setText("使用电池")
             else:
                 # 估算剩余时间
                 secs = getattr(battery, "secsleft", None)
@@ -140,6 +143,11 @@ class BatteryWidget(WidgetBase):
 
     def on_close(self) -> None:
         self._timer.stop()
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_time" in settings:
+            self._show_time = bool(settings["show_time"])
+            self._refresh()
 
     def apply_settings(self, settings: dict) -> None:
         pass

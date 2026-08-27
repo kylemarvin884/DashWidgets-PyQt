@@ -31,7 +31,11 @@ class _FnTask(QRunnable):
             result = self._fn()
         except Exception as e:  # noqa: BLE001 — 异常作为结果回传
             result = e
-        self._signals.done.emit(result)
+        try:
+            self._signals.done.emit(result)
+        except RuntimeError:
+            # 接收方（组件）在任务完成前已被销毁，安全忽略
+            pass
 
 
 def run_in_background(fn: Callable[[], Any], on_done: Callable[[Any], None]) -> TaskSignals:

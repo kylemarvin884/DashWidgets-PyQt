@@ -16,7 +16,7 @@ _REFRESH_MS = 10 * 60 * 1000  # 10 分钟
 class _ItemRow(QWidget):
     """单条文章行：标题 + 来源，点击打开原文"""
 
-    def __init__(self, title: str, source: str, link: str, parent=None):
+    def __init__(self, title: str, source: str, link: str, show_source: bool = True, parent=None):
         super().__init__(parent)
         self._link = link
         lay = QVBoxLayout(self)
@@ -30,7 +30,7 @@ class _ItemRow(QWidget):
         self._title_lbl.setWordWrap(True)
         lay.addWidget(self._title_lbl)
 
-        if source:
+        if show_source and source:
             src_lbl = QLabel(source)
             src_lbl.setFont(QFont("Segoe UI Variable", 9, QFont.Weight.Light))
             src_lbl.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
@@ -52,6 +52,9 @@ class RssWidget(WidgetBase):
         super().__init__(config, services, parent)
         self._fetching = False
         self._task = None  # 持有后台任务信号对象，防止被 GC
+        self._max_items = int(config.settings.get("max_items", _MAX_ITEMS) or _MAX_ITEMS)
+        self._show_source = bool(config.settings.get("show_source", True))
+        self._last_rows: list[tuple[str, str, str]] = []  # 最近一次数据，改设置时无需重新抓取
         self._setup_ui()
         self._refresh()
 
@@ -84,6 +87,7 @@ class RssWidget(WidgetBase):
             return
         self._fetching = True
         self._title.setText("RSS 订阅 · 刷新中…")
+        max_items = self._max_items
 
         def _work():
             from app.services.rss_service import get_rss_service
@@ -93,14 +97,14 @@ class RssWidget(WidgetBase):
             merged: list[tuple[str, str, str]] = []  # (title, source, link)
             rounds = 0
             feeds = svc.get_feeds()
-            while len(merged) < _MAX_ITEMS and rounds < 20:
+            while len(merged) < max_items and rounds < 20:
                 progressed = False
                 for feed in feeds:
                     if rounds < len(feed.items):
                         item = feed.items[rounds]
                         merged.append((item.title, feed.title, item.link))
                         progressed = True
-                        if len(merged) >= _MAX_ITEMS:
+                        if len(merged) >= max_items:
                             break
                 if not progressed:
                     break
@@ -117,19 +121,39 @@ class RssWidget(WidgetBase):
             return
 
         merged, has_any_feed = result
+        self._last_rows = merged
         if not merged:
             self._title.setText("RSS 订阅" if has_any_feed else "RSS 订阅 · 暂无订阅源")
         else:
             self._title.setText("RSS 订阅")
 
-        # 清空旧条目
+        self._rebuild_rows()
+
+    def _rebuild_rows(self):
+        """按当前设置（条数/来源）重建条目行"""
         while self._list_lay.count():
             item = self._list_lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        for title, source, link in merged:
-            self._list_lay.addWidget(_ItemRow(title, source, link, self._list_container))
+        for title, source, link in self._last_rows[:self._max_items]:
+            self._list_lay.addWidget(
+                _ItemRow(title, source, link, self._show_source, self._list_container)
+            )
+
+    def on_settings_changed(self, settings: dict) -> None:
+        changed = False
+        if "max_items" in settings:
+            try:
+                self._max_items = max(1, min(10, int(settings["max_items"])))
+                changed = True
+            except (TypeError, ValueError):
+                pass
+        if "show_source" in settings:
+            self._show_source = bool(settings["show_source"])
+            changed = True
+        if changed:
+            self._rebuild_rows()
 
     def on_close(self):
         self._refresh_timer.stop()

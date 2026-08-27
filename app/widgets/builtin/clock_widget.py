@@ -18,6 +18,7 @@ class ClockWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._show_seconds = bool(config.settings.get("show_seconds", False))
+        self._show_date = bool(config.settings.get("show_date", True))
         self._custom_color: str | None = None
         self._setup_ui()
         self._start_timers()
@@ -64,6 +65,7 @@ class ClockWidget(WidgetBase):
         now = QDateTime.currentDateTime()
         fmt = "HH:mm:ss" if self._show_seconds else "HH:mm"
         self._time_label.setText(now.toString(fmt))
+        self._date_label.setVisible(self._show_date)
         self._date_label.setText(
             f"{now.date().month()}月{now.date().day()}日 周{_WEEKDAYS_CN[now.date().dayOfWeek() - 1]}"
         )
@@ -82,6 +84,11 @@ class ClockWidget(WidgetBase):
         show_seconds = settings.get("show_seconds")
         if show_seconds is not None:
             self._show_seconds = bool(show_seconds)
+
+        show_date = settings.get("show_date")
+        if show_date is not None:
+            self._show_date = bool(show_date)
+            self._date_label.setVisible(self._show_date)
 
         font_size = settings.get("font_size")
         if font_size is not None:

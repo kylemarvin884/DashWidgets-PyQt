@@ -94,7 +94,13 @@ class SystemMonitorWidget(WidgetBase):
 
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
+        self._show_cpu_freq = bool(config.settings.get("show_cpu_freq", True))
         self._setup_ui()
+        self._apply_visibility(
+            show_cpu=config.settings.get("show_cpu", True),
+            show_mem=config.settings.get("show_mem", True),
+            show_disk=config.settings.get("show_disk", True),
+        )
         self._connect_stats_service()
 
     def _setup_ui(self) -> None:
@@ -121,6 +127,12 @@ class SystemMonitorWidget(WidgetBase):
         self._disk_bar = _StatBar("磁盘", self.DISK_COLOR, self)
         main_layout.addWidget(self._disk_bar)
 
+    def _apply_visibility(self, show_cpu: bool, show_mem: bool, show_disk: bool) -> None:
+        """按设置显示/隐藏各指标行"""
+        self._cpu_bar.setVisible(show_cpu)
+        self._mem_bar.setVisible(show_mem)
+        self._disk_bar.setVisible(show_disk)
+
     def _connect_stats_service(self) -> None:
         """订阅后台采样服务（psutil 不再占用 UI 线程）"""
         from app.services.system_stats_service import get_system_stats_service
@@ -129,12 +141,22 @@ class SystemMonitorWidget(WidgetBase):
         self._stats_svc.acquire_system()
 
     def _on_stats(self, s: dict) -> None:
-        freq_str = f"{s['cpu_ghz']:.1f} GHz" if s["cpu_ghz"] > 0 else ""
+        freq_str = (f"{s['cpu_ghz']:.1f} GHz" if s["cpu_ghz"] > 0 else "") \
+            if self._show_cpu_freq else ""
         self._cpu_bar.set_value(s["cpu"] / 100, sub_text=freq_str)
         self._mem_bar.set_value(s["mem_percent"] / 100,
                                 f"{s['mem_used_gb']:.1f}/{s['mem_total_gb']:.0f} GB")
         self._disk_bar.set_value(s["disk_percent"] / 100,
                                  f"{s['disk_used_gb']:.0f}/{s['disk_total_gb']:.0f} GB")
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_cpu_freq" in settings:
+            self._show_cpu_freq = bool(settings["show_cpu_freq"])
+        self._apply_visibility(
+            show_cpu=settings.get("show_cpu", True),
+            show_mem=settings.get("show_mem", True),
+            show_disk=settings.get("show_disk", True),
+        )
 
     def on_close(self) -> None:
         try:
