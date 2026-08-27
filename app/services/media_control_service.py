@@ -5,6 +5,9 @@ Windows 媒体控制服务
 1. 发送媒体键控制（播放/暂停、上一曲、下一曲）
 2. 通过 Windows Audio Session 枚举活跃音频会话
 3. 窗口标题回退探测常见音乐应用
+
+线程模型：单个轮询线程负责探测状态，通过 Qt 信号（自动排队到主线程）
+通知 UI；UI 线程只读 state，不再触发探测，避免阻塞主线程。
 """
 from __future__ import annotations
 
@@ -15,6 +18,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from PySide6.QtCore import QObject, Signal
+
 # ── Windows 常量 ──────────────────────────────────────────────── #
 
 VK_MEDIA_NEXT_TRACK = 0xB0
@@ -24,6 +29,15 @@ VK_MEDIA_PLAY_PAUSE = 0xB3
 KEYEVENTF_KEYUP = 0x0002
 
 user32 = ctypes.windll.user32
+
+
+class _MediaSignals(QObject):
+    """跨线程媒体状态信号桥（轮询线程 → UI 线程，Qt 自动排队）"""
+    state_changed = Signal(object)  # MediaState
+    media_key_sent = Signal(str)
+
+
+media_signals = _MediaSignals()
 
 
 @dataclass
@@ -55,6 +69,12 @@ class MediaControlService:
         self._state = MediaState()
         self._callbacks: list = []
         self._polling = False
+        self._poll_lock = threading.Lock()
+        self._listeners = 0
+        self._wake = threading.Event()
+        self._local = threading.local()  # 每线程独立的 winrt 事件循环
+        self._last_emitted: tuple | None = None  # (title, artist, is_playing)
+        self._last_thumb_bytes: bytes | None = None
         # 手动跟踪播放状态（用于图标切换）
         self._manually_playing = False
 
@@ -66,17 +86,22 @@ class MediaControlService:
         self._send_media_key(VK_MEDIA_PLAY_PAUSE)
         # 切换手动跟踪的播放状态
         self._manually_playing = not self._manually_playing
-        if self._manually_playing and not self._state.title:
-            # 如果还没有歌曲信息，至少标记为"播放中"
-            pass
-        # 立即刷新 UI
-        self.refresh()
+        media_signals.media_key_sent.emit("play_pause")
+        self.request_refresh()
 
     def next_track(self) -> None:
         self._send_media_key(VK_MEDIA_NEXT_TRACK)
+        media_signals.media_key_sent.emit("next")
+        self.request_refresh()
 
     def prev_track(self) -> None:
         self._send_media_key(VK_MEDIA_PREV_TRACK)
+        media_signals.media_key_sent.emit("prev")
+        self.request_refresh()
+
+    def previous_track(self) -> None:
+        """prev_track 的别名（保持旧 API 兼容）"""
+        self.prev_track()
 
     def stop(self) -> None:
         self._send_media_key(VK_MEDIA_STOP)
@@ -103,26 +128,57 @@ class MediaControlService:
         self._callbacks.append(callback)
 
     def start_polling(self, interval_ms: int = 2000) -> None:
-        self._polling = True
+        """启动（或加入）单一轮询线程；多次调用不会创建额外线程"""
+        with self._poll_lock:
+            self._listeners += 1
+            interval_ms = min(
+                interval_ms,
+                getattr(self, "_interval_ms", interval_ms),
+            )
+            self._interval_ms = interval_ms
+            if self._polling:
+                return
+            self._polling = True
 
-        def _poll():
-            last_title = ""
-            while self._polling:
-                self.refresh()
-                if self._state.title != last_title and self._callbacks:
-                    for cb in self._callbacks:
-                        try:
-                            cb(self._state)
-                        except Exception:
-                            pass
-                    last_title = self._state.title
-                time.sleep(interval_ms / 1000.0)
-
-        t = threading.Thread(target=_poll, daemon=True)
+        t = threading.Thread(
+            target=self._poll_loop,
+            args=(interval_ms / 1000.0,),
+            daemon=True,
+            name="DashWidgetsMediaPoll",
+        )
         t.start()
 
     def stop_polling(self) -> None:
-        self._polling = False
+        """引用计数式停止：所有监听者退出后才真正结束轮询线程"""
+        with self._poll_lock:
+            self._listeners = max(0, self._listeners - 1)
+            if self._listeners == 0:
+                self._polling = False
+                self._wake.set()
+
+    def request_refresh(self) -> None:
+        """让轮询线程立刻探测一次（无需等待下个周期）"""
+        self._wake.set()
+
+    def _poll_loop(self, interval: float) -> None:
+        while self._polling:
+            self.refresh()
+            self._notify_if_changed()
+            # 用 Event.wait 代替 time.sleep，便于被立即唤醒
+            self._wake.wait(interval)
+            self._wake.clear()
+
+    def _notify_if_changed(self) -> None:
+        """状态摘要变化时通过 Qt 信号广播（自动排队到 UI 线程）"""
+        sig = (self._state.title, self._state.artist, self._state.is_playing)
+        if sig != self._last_emitted:
+            self._last_emitted = sig
+            media_signals.state_changed.emit(self._state)
+            for cb in self._callbacks:
+                try:
+                    cb(self._state)
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------ #
     #  状态读取：多级策略
@@ -179,26 +235,36 @@ class MediaControlService:
 
             try:
                 thumb = info.thumbnail
-                if thumb and len(bytes(thumb)) > 100:
-                    from pathlib import Path
-                    out_dir = Path(__file__).parent.parent.parent / "data"
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    out_path = out_dir / "_media_thumb.jpg"
-                    with open(out_path, "wb") as f:
-                        f.write(bytes(thumb))
-                    self._state.thumbnail_path = str(out_path)
+                if thumb:
+                    thumb_bytes = bytes(thumb)
+                    if len(thumb_bytes) > 100 and thumb_bytes != self._last_thumb_bytes:
+                        from pathlib import Path
+                        out_dir = Path(__file__).parent.parent.parent / "data"
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        out_path = out_dir / "_media_thumb.jpg"
+                        with open(out_path, "wb") as f:
+                            f.write(thumb_bytes)
+                        self._last_thumb_bytes = thumb_bytes
+                        self._state.thumbnail_path = str(out_path)
             except Exception:
                 pass
             return True
 
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(_async_read())
-            loop.close()
-            return result
+            loop = self._winrt_loop()
+            return loop.run_until_complete(_async_read())
         except Exception:
             return False
+
+    def _winrt_loop(self):
+        """复用当前线程的 asyncio 事件循环（避免每次探测都新建/销毁）"""
+        import asyncio
+
+        loop = getattr(self._local, "loop", None)
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            self._local.loop = loop
+        return loop
 
     # ── 音频会话枚举（通过 Windows Core Audio API）── #
 

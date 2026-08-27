@@ -55,7 +55,9 @@ class UsageTracker:
             logger.error(f"保存使用统计数据失败: {e}")
 
     def start_session(self, widget_id: str):
-        """开始追踪某个组件的使用会话"""
+        """开始追踪某个组件的使用会话（幂等：会话中重复调用不重置计时）"""
+        if widget_id in self._session_start:
+            return
         self._session_start[widget_id] = datetime.now()
         logger.debug(f"开始追踪组件使用: {widget_id}")
 
@@ -81,6 +83,18 @@ class UsageTracker:
         self._save()
         logger.debug(f"结束追踪组件使用: {widget_id}, 本次时长: {duration:.1f}s")
 
+    def end_all_sessions(self):
+        """结束所有进行中的会话（应用退出时调用，避免时长丢失）"""
+        for widget_id in list(self._session_start.keys()):
+            self.end_session(widget_id)
+
+    def get_session_time(self, widget_id: str) -> float:
+        """当前进行中会话的时长（秒），无会话返回 0"""
+        start = self._session_start.get(widget_id)
+        if start is None:
+            return 0.0
+        return (datetime.now() - start).total_seconds()
+
     def get_total_time(self, widget_id: str) -> float:
         """获取某个组件的总使用时长（秒）"""
         if widget_id in self._usage_data:
@@ -100,6 +114,19 @@ class UsageTracker:
         """
         total_time_hours = self.get_total_time(widget_id) / 3600
         session_count = self.get_session_count(widget_id)
+        return total_time_hours * 10 + session_count * 5
+
+    def get_live_total_time(self, widget_id: str) -> float:
+        """总使用时长 + 当前进行中会话的时长（用于实时展示）"""
+        return self.get_total_time(widget_id) + self.get_session_time(widget_id)
+
+    def get_live_score(self, widget_id: str) -> float:
+        """包含进行中会话的实时推荐分数"""
+        total_time_hours = self.get_live_total_time(widget_id) / 3600
+        session_count = self.get_session_count(widget_id)
+        # 进行中的会话按已开始计一次
+        if widget_id in self._session_start and session_count == 0:
+            session_count = 1
         return total_time_hours * 10 + session_count * 5
 
     def get_ranked_widgets(self, limit: int = 10) -> list[tuple[str, float]]:

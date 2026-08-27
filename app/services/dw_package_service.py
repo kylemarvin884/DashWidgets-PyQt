@@ -24,6 +24,7 @@ from typing import Any
 from loguru import logger
 
 from app.constants import PLUGINS_DIR
+from app.utils.versioning import version_tuple as _version_tuple
 
 # .dw 文件包内必须包含的文件
 _REQUIRED_FILES = {"plugin.json", "__init__.py"}
@@ -93,10 +94,13 @@ def install_dw(dw_path: str | Path) -> tuple[bool, str]:
     """
     将 .dw 文件安装到插件目录。
 
+    已存在同 ID 插件时按版本判断：新版本 ≥ 已安装版本才允许覆盖升级，
+    且升级时保留插件数据目录中的 config.json（插件自身的持久化配置）。
+
     Parameters
     ----------
     dw_path : str | Path
-        .dw 文件路径
+        .dw 文件路径。
 
     Returns
     -------
@@ -114,6 +118,7 @@ def install_dw(dw_path: str | Path) -> tuple[bool, str]:
 
     plugin_id = meta_data.get("id", "")
     plugin_name = meta_data.get("name", "unknown")
+    new_version = meta_data.get("version", "1.0.0")
 
     if not plugin_id:
         return False, "plugin.json 中缺少 id 字段"
@@ -121,9 +126,32 @@ def install_dw(dw_path: str | Path) -> tuple[bool, str]:
     # 目标目录
     target_dir = PLUGINS_DIR / plugin_id
 
-    # 检查是否已存在同名插件
+    # 检查是否已存在同名插件（版本感知升级）
+    preserved_config: str | None = None
     if target_dir.exists():
-        # 先删除旧版本
+        old_manifest = target_dir / "plugin.json"
+        old_version = "0.0.0"
+        try:
+            if old_manifest.exists():
+                old_meta = json.loads(old_manifest.read_text(encoding="utf-8"))
+                old_version = old_meta.get("version", "0.0.0")
+        except Exception:
+            logger.warning("读取已安装插件版本失败: {}", plugin_id)
+
+        if _version_tuple(new_version) < _version_tuple(old_version):
+            return False, (
+                f"已安装的「{plugin_name}」v{old_version} 比 v{new_version} 更新，"
+                f"如需降级请先卸载后重装"
+            )
+
+        # 备份插件自己的配置（升级后还原，避免数据丢失）
+        old_config = target_dir / "config.json"
+        try:
+            if old_config.exists():
+                preserved_config = old_config.read_text(encoding="utf-8")
+        except Exception:
+            logger.warning("备份插件配置失败: {}", plugin_id)
+
         try:
             shutil.rmtree(target_dir)
         except Exception as e:
@@ -148,8 +176,16 @@ def install_dw(dw_path: str | Path) -> tuple[bool, str]:
             target_dir.mkdir(parents=True, exist_ok=True)
             zf.extractall(target_dir)
 
-            logger.info("插件 '{}' 已安装到 {}", plugin_name, target_dir)
-            return True, f"插件「{plugin_name}」安装成功"
+            # 还原插件配置
+            if preserved_config is not None:
+                try:
+                    (target_dir / "config.json").write_text(preserved_config, encoding="utf-8")
+                except Exception:
+                    logger.warning("还原插件配置失败: {}", plugin_id)
+
+            action = "升级" if preserved_config is not None else "安装"
+            logger.info("插件 '{}' 已{}到 {}", plugin_name, action, target_dir)
+            return True, f"插件「{plugin_name}」v{new_version} {action}成功"
 
     except zipfile.BadZipFile:
         return False, ".dw 文件格式无效"

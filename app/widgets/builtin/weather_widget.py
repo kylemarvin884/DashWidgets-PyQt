@@ -1,4 +1,4 @@
-"""天气小组件 — Win11 风格，自动获取真实天气"""
+"""天气小组件 — Win11 风格，自动获取真实天气（网络请求在工作线程执行）"""
 from __future__ import annotations
 import math
 
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 from app.widgets.base_widget import WidgetBase, WidgetConfig
 from app.services.desktop_widget_service import Win11Style
+from app.utils.async_fetch import run_in_background
 
 # 服务 icon → 图标组件类型 映射
 _ICON_MAP = {
@@ -109,6 +110,8 @@ class WeatherWidget(WidgetBase):
 
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
+        self._fetching = False
+        self._task = None  # 持有后台任务信号对象，防止被 GC
         self._setup_ui()
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(30 * 60 * 1000)  # 30分钟
@@ -144,18 +147,31 @@ class WeatherWidget(WidgetBase):
         main_layout.addStretch()
 
     def _fetch_weather(self) -> None:
-        """从 WeatherService 获取真实天气数据"""
-        try:
+        """在工作线程获取天气数据（服务内部有缓存与并发去重）"""
+        if self._fetching:
+            return
+        self._fetching = True
+
+        def _work():
             from app.services.weather_service import get_weather_service
-            svc = get_weather_service()
-            data = svc.get_weather()
-            if data:
-                wtype = _ICON_MAP.get(data.icon, "sunny")
-                self._icon.set_weather(wtype)
-                self._desc_label.setText(data.condition)
-                self._temp_label.setText(f"{data.temperature:.0f}℃")
-        except Exception:
-            pass
+            try:
+                return get_weather_service().get_weather()
+            except Exception:
+                return None
+
+        self._task = run_in_background(_work, self._on_weather)
+
+    def _on_weather(self, data) -> None:
+        """工作线程结果回传（UI 线程执行）"""
+        self._fetching = False
+        if data:
+            wtype = _ICON_MAP.get(data.icon, "sunny")
+            self._icon.set_weather(wtype)
+            self._desc_label.setText(data.condition)
+            self._temp_label.setText(f"{data.temperature:.0f}℃")
+        else:
+            self._desc_label.setText("获取失败")
+            self._temp_label.setText("--℃")
 
     def apply_settings(self, settings: dict) -> None:
         if "weather" in settings:

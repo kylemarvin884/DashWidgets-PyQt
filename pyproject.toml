@@ -20,3 +20,7 @@ dashwidgets = "main:main"
 dev = [
     "pytest>=7.0.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -62,7 +62,7 @@ class StopwatchWidget(WidgetBase):
             self._update_tick.stop()
         else:
             self._timer.start()
-            self._update_tick.start(50)
+            self._update_tick.start(100)
         self._running = not self._running
         self._start_btn.setIcon(FIF.PAUSE if self._running else FIF.PLAY)
 

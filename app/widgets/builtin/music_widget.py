@@ -131,18 +131,16 @@ class MusicWidget(WidgetBase):
         main_layout.addLayout(row_ctrl)
         main_layout.addStretch()
 
-        # 定时刷新（1秒一次，更及时）
-        self._timer_refresh = QTimer(self)
-        self._timer_refresh.setInterval(1000)
-        self._timer_refresh.timeout.connect(self._refresh_state)
-
     def _connect_media_service(self) -> None:
         try:
-            from app.services.media_control_service import get_media_service
+            from app.services.media_control_service import (
+                get_media_service, media_signals,
+            )
             self._media_svc = get_media_service()
-            self._media_svc.start_polling(interval_ms=3000)
-            QTimer.singleShot(1000, self._refresh_state)
-            self._timer_refresh.start()
+            # 状态由服务轮询线程探测，经 Qt 信号（自动排队到 UI 线程）推送
+            media_signals.state_changed.connect(self._update_ui)
+            self._media_svc.start_polling(interval_ms=2000)
+            self._refresh_state()
         except Exception as e:
             print(f"[MusicWidget] 连接媒体服务失败: {e}")
 
@@ -150,7 +148,7 @@ class MusicWidget(WidgetBase):
         if not self._media_svc:
             return
         try:
-            state = self._media_svc.refresh()
+            state = self._media_svc.state
             self._update_ui(state)
         except Exception:
             pass
@@ -209,7 +207,10 @@ class MusicWidget(WidgetBase):
             self._media_svc.next_track()
 
     def on_close(self) -> None:
-        if self._media_svc:
-            self._media_svc.stop_polling()
-        if hasattr(self, '_timer_refresh'):
-            self._timer_refresh.stop()
+        try:
+            if self._media_svc:
+                self._media_svc.stop_polling()
+            from app.services.media_control_service import media_signals
+            media_signals.state_changed.disconnect(self._update_ui)
+        except Exception:
+            pass

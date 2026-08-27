@@ -174,6 +174,7 @@ else:
 class _WidgetSignals(QObject):
     widget_closed = Signal(str)
     widget_shown = Signal(str)
+    widget_hidden = Signal(str)
 
 
 widget_signals = _WidgetSignals()
@@ -798,10 +799,13 @@ class DesktopWidgetManager:
         self._initialized = True
         self._active_widgets: dict[str, DesktopWidgetWindow] = {}
         self._model = WidgetModel()
+        from app.services.usage_tracker import UsageTracker
+        self._usage = UsageTracker()
 
     def show_widget(self, widget_id: str):
         if widget_id in self._active_widgets:
             self._active_widgets[widget_id].show()
+            self._usage.start_session(widget_id)
             return
 
         info = self._model.get_widget(widget_id)
@@ -816,6 +820,7 @@ class DesktopWidgetManager:
         window = DesktopWidgetWindow(info)
         window.show()
         self._active_widgets[widget_id] = window
+        self._usage.start_session(widget_id)
         widget_signals.widget_shown.emit(widget_id)
         logger.info("桌面小组件已显示: {}", info.name)
 
@@ -825,7 +830,10 @@ class DesktopWidgetManager:
         window = self._active_widgets[widget_id]
         window.stop_all_timers()
         window.close()
+        window.deleteLater()  # 释放窗口及其子组件，防止隐藏后仍驻留内存
         del self._active_widgets[widget_id]
+        self._usage.end_session(widget_id)
+        widget_signals.widget_hidden.emit(widget_id)
         logger.info("桌面小组件已隐藏: {}", widget_id)
 
     def hide_all(self):
@@ -850,6 +858,7 @@ class DesktopWidgetManager:
     def _on_widget_closed(self, widget_id: str):
         if widget_id in self._active_widgets:
             del self._active_widgets[widget_id]
+        self._usage.end_session(widget_id)
         info = self._model.get_widget(widget_id)
         if info and info.is_active:
             info.is_active = False

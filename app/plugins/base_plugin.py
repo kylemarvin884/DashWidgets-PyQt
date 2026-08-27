@@ -387,6 +387,9 @@ class PluginAPI:
         # 主窗口引用
         self._evaluate_js: Callable[[str], Any] | None = None  # JS 执行回调
         self._main_window: Any | None = None  # 主窗口引用
+        # 权限（由管理器注入）
+        self._permission_checker: Callable[[PluginPermission], bool] | None = None
+        self._permission_request_cb: Callable[[PluginPermission, str], bool] | None = None
 
         if self._data_dir is not None:
             self._data_dir.mkdir(parents=True, exist_ok=True)
@@ -758,7 +761,7 @@ class PluginAPI:
     # ------------------------------------------------------------------ #
 
     def has_permission(self, permission: PluginPermission) -> bool:
-        """检查插件是否拥有指定权限。
+        """检查插件是否拥有指定权限（以加载时用户批准的权限列表为准）。
 
         Parameters
         ----------
@@ -770,16 +773,20 @@ class PluginAPI:
         bool
             是否拥有该权限。
         """
-        # 从插件元数据获取权限
-        # 这里需要通过管理器获取，实际实现由管理器注入
-        return True  # 默认允许
+        if self._permission_checker is not None:
+            try:
+                return bool(self._permission_checker(permission))
+            except Exception:
+                logger.exception("权限检查异常: {}", permission)
+                return False
+        return False  # 未注入检查器时按最小权限处理
 
     def request_permission(
         self,
         permission: PluginPermission,
         reason: str = "",
     ) -> bool:
-        """请求额外权限。
+        """请求额外权限（运行时弹出确认）。
 
         Parameters
         ----------
@@ -793,10 +800,24 @@ class PluginAPI:
         bool
             请求是否被批准。
         """
+        if self.has_permission(permission):
+            return True
         logger.info("插件 {} 请求权限 {} (原因: {})",
                     self._plugin_id, permission.value, reason)
-        # 这里需要实现权限请求逻辑
-        return True
+        if self._permission_request_cb is not None:
+            try:
+                return bool(self._permission_request_cb(permission, reason))
+            except Exception:
+                logger.exception("权限请求异常: {}", permission)
+        return False
+
+    def _set_permission_checker(self, checker: Callable[[PluginPermission], bool]) -> None:
+        """由管理器注入权限检查函数（内部使用）。"""
+        self._permission_checker = checker
+
+    def _set_permission_request_cb(self, cb: Callable[[PluginPermission, str], bool]) -> None:
+        """由管理器注入运行时权限请求回调（内部使用）。"""
+        self._permission_request_cb = cb
 
     # ------------------------------------------------------------------ #
     # 自动化触发
@@ -814,7 +835,7 @@ class PluginAPI:
         """
         from app.events import EventBus, EventType
         try:
-            EventBus.emit(
+            EventBus.instance().emit(
                 EventType.AUTOMATION_TRIGGERED,
                 trigger_id=trigger_id,
                 source_plugin=self._plugin_id,
@@ -822,7 +843,7 @@ class PluginAPI:
             )
             logger.debug("插件 {} 触发自动化: {}", self._plugin_id, trigger_id)
         except Exception:
-            logger.warning("触发自动化失败: {}", trigger_id)
+            logger.exception("插件 {} 触发自动化 {} 失败", self._plugin_id, trigger_id)
 
     # ------------------------------------------------------------------ #
     # 钩子注册

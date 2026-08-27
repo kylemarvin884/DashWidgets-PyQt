@@ -1,135 +1,79 @@
-# 代码优化总结
+# 优化总结（2026-08-28）
 
-## 修复的错误和Bug
+本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
+测试基线：`uv run pytest` → **61 passed**（优化前 17 个用例中 1 个失败）。
 
-### 1. 网格系统移除后的兼容性问题
-- **问题**: `settings_view.py` 和 `settings_service.py` 中仍引用已删除的 `GRID_SIZE`
-- **修复**: 
-  - 更新 `settings_view._apply_grid_settings()` 使用 `SNAP_THRESHOLD` 和 `EDGE_SNAP_THRESHOLD`
-  - 更新 `settings_service.grid_size` 文档说明
+## 性能与占用
 
-### 2. 定时器资源管理
-- **问题**: 各个小组件的定时器没有统一管理，可能导致资源泄漏
-- **修复**: 
-  - 在 `DesktopWidgetBase` 中添加 `_timers` 列表管理所有定时器
-  - 添加 `_add_timer()` 方法统一注册定时器
-  - 在 `closeEvent()` 中统一停止所有定时器
-  - 更新所有小组件使用新的定时器管理机制
+### 主页刷新（原 1Hz 全量重建）
+- 原实现每秒销毁并重建统计卡片/芯片/排行行，且每秒调用 3 次 `get_all_widgets()`（每次都遍历插件注册表）。
+- 现改为 **事件驱动**：`widgets_changed` / `widget_shown` / `widget_closed` 信号触发全量刷新；30 秒慢速 tick 只原地更新数值文本（进行中会话的实时时长）。
+- 排行行支持原地更新（`_RankRow.update_data`），组件集合不变时不重建任何控件；进度条改为真实得分占比（原为按名次伪造的假数据）。
 
-### 3. 待办小组件输入体验
-- **问题**: 输入对话框的事件处理复杂，用户体验不佳
-- **修复**: 
-  - 改为在组件内直接显示输入框和取消按钮
-  - 简化事件处理逻辑
-  - 更好的视觉反馈
+### 网络请求全部移出 UI 线程
+- 新增通用后台任务工具 `app/utils/async_fetch.py`（QThreadPool + Qt 信号自动跨线程排队）。
+- **天气**：构造函数与 30 分钟定时器中的阻塞 `get_weather()` 改为工作线程执行；获取失败时 UI 显示「获取失败」而不是静默吞掉；无缓存且失败时服务层抛出异常由组件兜底。
+- **天气服务请求去重**：`_fetch_lock` 串行化并发请求（双检缓存），多个天气组件同时刷新只发一次真实请求。
+- **天气城市缓存**：`get_location` 的响应里本就带 city/country，现在直接缓存，砍掉了每次刷新都发起的第二个 IP 定位请求（城市信息也随缓存文件持久化）。
+- **RSS**：首次运行不再同步抓取默认订阅源（原来会阻塞启动）；组件内通过工作线程刷新并交错合并各源条目，点击条目可打开原文。
+- **汇率**：原来整块是硬编码假数据；新建 `ExchangeService`（frankfurter.app，免费无 Key，CNY 基准），1 小时缓存 + 离线回退旧缓存，组件在工作线程获取。
 
-## 新增功能
+### 媒体控制服务（音乐组件）
+- 原来 `MusicWidget` 每秒在 **UI 线程** 调 `refresh()`（winrt 新建事件循环 / COM 枚举 / EnumWindows），同时还有一个 3 秒轮询线程做同样的事。
+- 现在：状态只由单一轮询线程探测，经 Qt 信号 `media_signals.state_changed` 自动排队回 UI 线程；组件的 1 秒 UI 定时器删除。
+- `start_polling` 引用计数去重：重复创建组件不再多开线程；`stop_polling` 所有监听者退出后才真正停止（原来一个组件关闭会把所有人的轮询停掉）。
+- winrt 的 asyncio 事件循环按线程缓存复用（原来每次探测新建+销毁）；封面缩略图内容不变时不再重复写盘。
+- 修复：`previous_track` 方法名不匹配导致「上一曲」按钮实际是坏的。
 
-### 1. 组件复制功能
-- 在右键菜单中添加"复制"选项
-- 复制时会创建新的小组件实例并自动定位到右侧
-- 保留原组件的所有设置
+### 定时器与重绘
+- 计时器组件：100ms tick + 每次累减 100ms（有累积漂移）→ 250ms tick + `QElapsedTimer` 单调时钟计算剩余时间（零漂移）；样式表只在完成状态变化时重设。
+- 秒表：50ms → 100ms。
+- 笔记组件：原来每敲一个键就写一次 `note.txt` → 600ms 防抖，关闭前补写。
 
-### 2. 全局快捷键
-- `Ctrl+H`: 隐藏/显示所有小组件
-- `Ctrl+Shift+A`: 显示添加小组件对话框并切换到小组件页面
+### 内存
+- 图片组件：加载时经 `QImageReader` 解码降采样，最长边限制 2560px（6000×4000 照片约 96MB → 约 17MB 常驻）。
+- 隐藏桌面组件时对窗口 `deleteLater()`，窗口与子组件（含 widget 自建定时器）及时释放。
 
-### 3. 边缘和组件吸附
-- **边缘吸附**: 距离屏幕边缘 10px 内自动吸附
-- **组件互相吸附**: 距离其他组件 20px 内自动吸附
-- 支持水平和垂直方向的吸附
+## 稳定性
 
-### 4. 所有未实现的小组件
-- **NetworkMonitorWidget**: 网络监控（上传/下载/磁盘）
-- **NoteWidget**: 笔记小组件
-- **ExchangeWidget**: 汇率显示（USD/CNY, EUR/CNY）
-- **RSSWidget**: RSS订阅管理
-- **ShortcutWidget**: 快捷方式列表
+- **使用统计接通**：`UsageTracker.start_session/end_session` 原来从未被调用（主页排行的核心数据源是空的）。现在桌面组件显示/隐藏/关闭时自动记录，退出应用前 `end_all_sessions()` 落盘；进行中会话有实时时长/分数（`get_live_*`）。
+- **RSS 配置兼容**：旧版 `rss_feeds.json` 的列表格式导致加载崩溃，现在两种格式都能读。
+- 隐藏组件窗口泄漏：`close()` 后补 `deleteLater()`。
 
-## 代码质量优化
+## 插件系统
 
-### 1. 统一的定时器管理
-```python
-# 旧方式
-self.timer = QTimer(self)
-self.timer.timeout.connect(self.update)
-self.timer.start(1000)
+- **`fire_trigger` 修复**：原来以类方法方式调用实例方法 `EventBus.emit`，必然 AttributeError 且被吞掉。
+- **热重载**：`PluginManager.reload_plugin()` — 卸载 → 清理 `sys.modules` 模块缓存（按路径 stem，修复了原来按插件 id 清理的 mismatch）→ 清理 `__pycache__`（同尺寸源码修改会命中陈旧字节码）→ 重新执行插件代码。调试窗口「重载插件」、`.dw` 覆盖升级后均走真热重载。
+- **权限落地**：
+  - 「始终允许」持久化到 `config/plugin_permissions.json`，跨启动不重复弹窗；卸载时撤销。
+  - `api.has_permission()` 依据已批准列表真实判断（原来是恒 `True` 的摆设）；`api.request_permission()` 运行时弹窗申请。
+- **`min_host_version` 强制校验**：宿主版本过低时拒绝加载并在插件页显示原因。
+- **钩子真实触发**：宿主现在会在应用启动/退出、组件显示/隐藏/移除时广播对应 `HookType`（原来 `emit_hook` 无任何宿主调用点，整个钩子系统是死代码）。
+- **禁用语义**：禁用插件时其钩子/触发器/动作自动从共享注册表摘除，重新启用时恢复；卸载同样摘除。
+- **卸载健壮性**：加载失败的插件（无运行时条目）现在也能从磁盘卸载；卸载同时清理权限授权。
+- **`.dw` 版本感知升级**：拒绝降级安装；升级时保留插件数据目录的 `config.json`（原来直接 rmtree 丢数据）。
 
-# 新方式
-timer = QTimer(self)
-timer.timeout.connect(self.update)
-timer.start(1000)
-self._add_timer(timer)  # 自动管理
+## 新增组件
+
+- **电池**（`battery`）：psutil 读取，环形电量指示（低电量红 / 充电黄带闪电 / 正常绿），30 秒轮询，台式机自动停轮询。
+- **倒数日**（`countdown`）：目标日期 + 名称，点击弹出设置对话框，配置随组件持久化。
+
+内置组件现为 **18 个**（`app/widgets/registry.py`），新组件经 `WidgetModel._merge_new_widgets` 自动出现在组件页。
+
+## 代码清理
+
+- 删除互相引用但无外部引用的死代码（共 1323 行）：`glass_base.py`、`glass_surface.py`、`draggable_widget_card.py`、`widget_custom_layout.py`、`widget_layout_model.py`、`placeholder_view.py`。
+- 新增 `.gitignore`，移除误提交的 51 个 `__pycache__` .pyc 文件。
+
+## 测试
+
+- 修复过时的天气测试（断言 emoji 图标 vs 现实现的 FluentIcon 名）。
+- 新增 `tests/test_plugin_manager.py`：拓扑排序、版本解析、加载生命周期、热重载、卸载（含未加载插件）、权限持久化/拒绝/运行时检查、min_host_version、fire_trigger 事件。
+- 新增 `tests/test_dw_package_service.py`：打包/读取元数据、`__pycache__` 排除、全新安装、升级/降级判定、配置保留、缺文件/路径穿越拒绝。
+- `pyproject.toml` 增加 `[tool.pytest.ini_options]`。
+
+## 运行测试
+
+```bash
+uv run pytest          # Windows GUI 环境建议加 QT_QPA_PLATFORM=offscreen
 ```
-
-### 2. 资源清理
-- 在 `closeEvent()` 中统一清理所有资源
-- 避免内存泄漏
-
-### 3. 类型提示完善
-- 添加 `List['DesktopWidgetBase']` 等类型提示
-- 提高代码可读性和可维护性
-
-## 性能优化
-
-### 1. 吸附计算优化
-- 只在组件有重叠区域时才进行吸附计算
-- 减少不必要的计算
-
-### 2. 拖动性能
-- 位置保存移到 `mouseReleaseEvent`
-- 避免拖动过程中频繁保存配置
-
-## 用户界面改进
-
-### 1. 待办小组件
-- 初始状态显示"点击 + 添加待办"
-- 添加任务时显示内联输入框
-- 支持完成任务和删除任务
-- 自动保存到配置文件
-
-### 2. 右键菜单
-- 添加"复制"选项
-- 保持菜单简洁
-
-### 3. 视觉反馈
-- 拖动时半透明效果
-- 吸附时的视觉提示（通过位置变化体现）
-
-## 配置和数据持久化
-
-### 1. 待办事项持久化
-- 待办事项保存到 `custom_settings["tasks"]`
-- 在组件加载时自动恢复
-
-### 2. 设置持久化
-- 吸附阈值设置保存到 settings.json
-- 全局快捷键设置可扩展
-
-## 测试建议
-
-### 1. 功能测试
-- [ ] 拖动小组件时的吸附功能
-- [ ] 右键菜单的复制功能
-- [ ] 全局快捷键响应
-- [ ] 待办小组件的添加/完成/删除
-- [ ] 所有小组件的显示和隐藏
-
-### 2. 性能测试
-- [ ] 同时运行多个小组件
-- [ ] 拖动时的流畅度
-- [ ] 定时器资源占用
-
-### 3. 兼容性测试
-- [ ] 不同屏幕分辨率
-- [ ] 多显示器环境
-- [ ] Windows 10/11
-
-## 后续优化建议
-
-1. **数据持久化**: 使用 SQLite 替代 JSON 文件
-2. **主题系统**: 支持自定义主题导入/导出
-3. **插件系统**: 允许第三方开发小组件
-4. **云同步**: 支持配置的云备份和同步
-5. **动画效果**: 添加更丰富的过渡动画
-6. **性能监控**: 实时显示系统资源占用

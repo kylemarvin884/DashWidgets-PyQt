@@ -140,6 +140,22 @@ AVAILABLE_WIDGETS: list[WidgetInfo] = [
         category="信息",
     ),
     WidgetInfo(
+        id="battery",
+        name="电池",
+        description="笔记本电量与充电状态",
+        icon_name="POWER_BUTTON",
+        size="small",
+        category="系统",
+    ),
+    WidgetInfo(
+        id="countdown",
+        name="倒数日",
+        description="距重要日子的倒计天数",
+        icon_name="CALENDAR",
+        size="small",
+        category="时间",
+    ),
+    WidgetInfo(
         id="automation",
         name="自动化点击",
         description="自动执行点击操作",

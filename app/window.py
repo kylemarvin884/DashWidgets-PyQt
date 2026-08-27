@@ -28,6 +28,7 @@ from app.constants import (
 from app.services.settings_service import SettingsService
 from app.views.toast_notification import show_success, show_warning, show_info
 from app.views.plugin_view import PERMISSION_DISPLAY_NAMES
+from app.plugins.base_plugin import HookType
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -145,6 +146,8 @@ class MainWindow(FluentWindow):
 
         # 加载插件并刷新导航和小组件列表
         self._plugin_mgr.discover_and_load()
+        self._connect_plugin_host_hooks()
+        self._plugin_mgr.emit_hook(HookType.ON_APP_STARTUP)
         # 检查并显示权限请求通知
         self._check_plugin_permissions()
         self._refresh_plugin_navigations()
@@ -746,7 +749,16 @@ class MainWindow(FluentWindow):
         self.raise_()
 
         if show_import_dialog(dw_path, parent=self):
-            self._plugin_mgr.discover_and_load()
+            # 若是覆盖升级已加载的插件，需要热重载使其生效
+            plugin_id = meta_data.get("id", "")
+            if plugin_id and self._plugin_mgr.get_entry(plugin_id):
+                ok, msg = self._plugin_mgr.reload_plugin(plugin_id)
+                if ok:
+                    show_success("重载成功", msg)
+                else:
+                    show_warning("重载失败", msg)
+            else:
+                self._plugin_mgr.discover_and_load()
             self._refresh_plugin_navigations()
             self.plugin_view._load_plugins()
             self.switchTo(self.plugin_view)
@@ -820,6 +832,16 @@ class MainWindow(FluentWindow):
 
     def _quit(self):
         """退出应用"""
+        # 结束使用统计会话（把进行中的时长落盘）
+        from app.services.usage_tracker import UsageTracker
+        UsageTracker.instance().end_all_sessions()
+
+        # 通知插件应用即将关闭
+        try:
+            self._plugin_mgr.emit_hook(HookType.ON_APP_SHUTDOWN)
+        except Exception:
+            logger.exception("ON_APP_SHUTDOWN 钩子分发异常")
+
         # 卸载所有插件
         self._plugin_mgr.unload_all()
 
@@ -828,6 +850,20 @@ class MainWindow(FluentWindow):
 
         # 退出应用
         QApplication.instance().quit()
+
+    def _connect_plugin_host_hooks(self) -> None:
+        """把宿主的小组件事件桥接到插件钩子系统"""
+        from app.services.desktop_widget_service import widget_signals
+
+        widget_signals.widget_shown.connect(
+            lambda wid: self._plugin_mgr.emit_hook(HookType.ON_WIDGET_SHOWN, wid)
+        )
+        widget_signals.widget_hidden.connect(
+            lambda wid: self._plugin_mgr.emit_hook(HookType.ON_WIDGET_HIDDEN, wid)
+        )
+        widget_signals.widget_closed.connect(
+            lambda wid: self._plugin_mgr.emit_hook(HookType.ON_WIDGET_REMOVED, wid)
+        )
 
     def _refresh_all_widgets(self):
         """刷新所有小组件"""

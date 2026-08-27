@@ -214,17 +214,37 @@ widget_manager = api.get_service("widget_manager")
 
 ## 钩子 (HookType) 列表
 
-| 钩子 | 说明 | 回调参数 |
-|------|------|----------|
-| `ON_LOAD` | 插件加载后 | 无 |
-| `ON_UNLOAD` | 插件卸载前 | 无 |
-| `ON_WIDGET_ADDED` | 小组件添加 | `widget_id: str` |
-| `ON_WIDGET_REMOVED` | 小组件移除 | `widget_id: str` |
-| `ON_WIDGET_SHOWN` | 小组件显示 | `widget_id: str` |
-| `ON_WIDGET_HIDDEN` | 小组件隐藏 | `widget_id: str` |
-| `ON_APP_STARTUP` | 应用启动 | 无 |
-| `ON_APP_SHUTDOWN` | 应用关闭 | 无 |
-| `SETTINGS_WIDGET` | 在设置页注入插件配置面板 | 无 |
+宿主当前会触发以下钩子（其余为预留，暂无宿主调用点）：
+
+| 钩子 | 说明 | 回调参数 | 宿主触发时机 |
+|------|------|----------|--------------|
+| `ON_APP_STARTUP` | 应用启动 | 无 | 所有插件加载完成后触发一次 |
+| `ON_APP_SHUTDOWN` | 应用关闭 | 无 | 退出前、`on_unload` 之前触发 |
+| `ON_WIDGET_SHOWN` | 小组件显示 | `widget_id: str` | 桌面组件显示时 |
+| `ON_WIDGET_HIDDEN` | 小组件隐藏 | `widget_id: str` | 桌面组件隐藏时 |
+| `ON_WIDGET_REMOVED` | 小组件移除 | `widget_id: str` | 桌面组件关闭并停用时 |
+
+预留（注册后暂不会被宿主触发）：`ON_LOAD`、`ON_UNLOAD`（由生命周期方法 `on_load`/`on_unload` 承担）、`ON_WIDGET_ADDED`、`ON_ALARM_BEFORE`、`ON_ALARM_AFTER`、`ON_TIMER_DONE`、`ON_STOPWATCH_LAP`、`ON_FOCUS_START`、`ON_FOCUS_END`、`CUSTOM_TRIGGER`、`CUSTOM_ACTION`、`SETTINGS_WIDGET`、`SIDEBAR_WIDGET`。
+
+注意：插件被 **禁用** 时，其钩子/触发器/动作会自动从宿主摘除（不再收到事件），重新 **启用** 时自动恢复。
+
+## 热重载
+
+- 调试窗口的「重载插件」按钮会对所有已加载插件执行真正的热重载（重新执行插件源码），并加载新发现的插件。
+- 通过 `.dw` 包覆盖升级已加载的插件后，会自动热重载使其立即生效。
+- 依赖库插件重载后，依赖它的功能插件持有的旧引用会失效，需要一并重载。
+
+## 权限
+
+- 声明了 `permissions` 的插件在首次加载时弹出授权确认；勾选「始终允许」后会持久化到 `config/plugin_permissions.json`，跨启动不再重复询问。
+- 运行时通过 `api.has_permission(permission)` 检查是否已获授权（最小权限：未声明/未批准返回 `False`）。
+- 运行时通过 `api.request_permission(permission, reason)` 弹窗申请额外权限，批准后立即生效。
+- 卸载插件会同时撤销其「始终允许」授权。
+
+## 版本兼容与升级
+
+- `min_host_version` 会被强制校验：宿主版本过低时插件拒绝加载，并在插件页显示原因。
+- 安装 `.dw` 包时按版本判断：仅允许同版本修复或升级安装，降级会被拒绝（需先卸载）；升级时会保留插件数据目录中的 `config.json`。
 
 ## 配置持久化
 

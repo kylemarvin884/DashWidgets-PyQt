@@ -91,6 +91,8 @@ class WidgetRegistry:
             from app.widgets.builtin.automation_widget import AutomationWidget
             from app.widgets.builtin.image_widget import ImageWidget
             from app.widgets.builtin.document_viewer_widget import DocumentViewerWidget
+            from app.widgets.builtin.battery_widget import BatteryWidget
+            from app.widgets.builtin.countdown_widget import CountdownWidget
 
             for cls in [
                 ClockWidget, StopwatchWidget, TimerWidget, PomodoroWidget,
@@ -98,6 +100,7 @@ class WidgetRegistry:
                 WeatherWidget, CalendarWidget, TodoWidget, MusicWidget,
                 NoteWidget, ExchangeWidget, RssWidget,
                 AutomationWidget, ImageWidget, DocumentViewerWidget,
+                BatteryWidget, CountdownWidget,
             ]:
                 self.register(cls)
 

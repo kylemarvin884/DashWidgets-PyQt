@@ -10,20 +10,28 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from .base_plugin import BasePlugin, LibraryPlugin, PluginAPI, PluginMeta, PluginType
-from app.constants import PLUGINS_DIR
+from .base_plugin import BasePlugin, HookType, LibraryPlugin, PluginAPI, PluginMeta, PluginType
+from app.constants import APP_VERSION, CONFIG_DIR, PLUGINS_DIR
+from app.utils.versioning import version_tuple as _version_tuple
 from qfluentwidgets import FluentIcon as FIF
 from loguru import logger
+
+# "始终允许"权限决定的持久化位置
+_PERMISSION_STATE_FILE = CONFIG_DIR / "plugin_permissions.json"
 
 
 class PluginEntry:
     """插件运行时记录"""
 
-    def __init__(self, plugin: BasePlugin, api: PluginAPI):
+    def __init__(self, plugin: BasePlugin, api: PluginAPI,
+                 path: Path | None = None, module_name: str = ""):
         self.plugin = plugin
         self.api = api
         self.enabled = True
         self.error: str | None = None
+        # 插件来源路径与模块名（热重载/卸载时清理 sys.modules 用）
+        self.path = path
+        self.module_name = module_name
         # 记录哪些插件依赖了本插件（用于卷载驱逐检查）
         self.dependents: set[str] = set()
 
@@ -67,6 +75,7 @@ class PluginManager:
         self._toast_cb = toast_callback
         self._permission_check_cb = permission_check_callback
         self._always_allowed_plugins: set[str] = set()
+        self._load_permission_state()
         self._entries: dict[str, PluginEntry] = {}
         self._main_window = main_window  # 主窗口引用
 
@@ -123,6 +132,43 @@ class PluginManager:
                 cb(*args)
             except Exception:
                 logger.exception("PluginManager 事件回调异常: {}", event)
+
+    # ------------------------------------------------------------------ #
+    # 权限状态持久化（"始终允许"跨启动保留）
+    # ------------------------------------------------------------------ #
+
+    def _load_permission_state(self) -> None:
+        try:
+            if _PERMISSION_STATE_FILE.exists():
+                data = json.loads(_PERMISSION_STATE_FILE.read_text(encoding="utf-8"))
+                self._always_allowed_plugins = set(data.get("always_allowed", []))
+        except Exception:
+            logger.exception("加载插件权限状态失败")
+
+    def _save_permission_state(self) -> None:
+        try:
+            _PERMISSION_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _PERMISSION_STATE_FILE.write_text(
+                json.dumps({"always_allowed": sorted(self._always_allowed_plugins)},
+                           ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.exception("保存插件权限状态失败")
+
+    def revoke_always_allow(self, plugin_id: str) -> None:
+        """撤销某插件的"始终允许"授权（下次加载重新询问）"""
+        if plugin_id in self._always_allowed_plugins:
+            self._always_allowed_plugins.discard(plugin_id)
+            self._save_permission_state()
+
+    # ------------------------------------------------------------------ #
+    # 钩子触发（宿主调用）
+    # ------------------------------------------------------------------ #
+
+    def emit_hook(self, hook_type: HookType, *args, **kwargs) -> list[Any]:
+        """向所有已加载插件广播某个钩子事件，收集返回值"""
+        return self._shared_api.emit_hook(hook_type, *args, **kwargs)
 
     # ------------------------------------------------------------------ #
     # 属性
@@ -233,6 +279,15 @@ class PluginManager:
         manifest = info["manifest"]
         data_dir = info["data_dir"]
 
+        # 宿主版本检查
+        if manifest.min_host_version:
+            if _version_tuple(manifest.min_host_version) > _version_tuple(APP_VERSION):
+                msg = (f"需要宿主版本 ≥ {manifest.min_host_version}，"
+                       f"当前为 {APP_VERSION}，请升级 DashWidgets")
+                logger.error("插件 {} 加载被拒绝: {}", manifest.id, msg)
+                self._emit("error", manifest.id, msg)
+                return
+
         module_name = f"_plugin_{path.stem}"
         entry_file = (path / "__init__.py") if is_pkg else path
 
@@ -252,7 +307,9 @@ class PluginManager:
             # plugin.json 中的 meta 优先于代码中的 meta 属性
             plugin_cls.meta = manifest
 
-            self._instantiate_and_register(plugin_cls, data_dir=data_dir)
+            self._instantiate_and_register(
+                plugin_cls, data_dir=data_dir, path=path, module_name=module_name,
+            )
         except Exception:
             self._emit("error", path.stem, "加载异常，查看日志")
             logger.exception("插件 {} 加载失败", path.name)
@@ -265,6 +322,8 @@ class PluginManager:
         self,
         plugin_cls: type[BasePlugin],
         data_dir: Path | None = None,
+        path: Path | None = None,
+        module_name: str = "",
     ) -> None:
         plugin = plugin_cls()
         pid = plugin.meta.id
@@ -296,9 +355,27 @@ class PluginManager:
                     return
                 if always_allow:
                     self._always_allowed_plugins.add(pid)
-                    logger.info("插件 {} 已添加到始终允许列表", pid)
+                    self._save_permission_state()
+                    logger.info("插件 {} 已添加到始终允许列表（已持久化）", pid)
 
         api = PluginAPI(plugin_data_dir=data_dir, plugin_id=pid)
+
+        # 注入权限能力：has_permission 依据已批准列表判断
+        granted = {p.value for p in permissions}
+
+        def _check_permission(perm, _g=granted):
+            return perm.value in _g
+
+        def _request_permission(perm, _reason="", _name=plugin.meta.name, _g=granted):
+            if self._permission_check_cb is None:
+                return False
+            accepted, _always = self._permission_check_cb(_name, [perm])
+            if accepted:
+                _g.add(perm.value)
+            return accepted
+
+        api._set_permission_checker(_check_permission)
+        api._set_permission_request_cb(_request_permission)
 
         # 注入宿主服务与通知能力
         for svc_name, svc_obj in self._services.items():
@@ -313,7 +390,7 @@ class PluginManager:
         if self._main_window:
             api._set_main_window(self._main_window)
 
-        entry = PluginEntry(plugin, api)
+        entry = PluginEntry(plugin, api, path=path, module_name=module_name)
         try:
             # 使用适配器，让插件通过自己的局部 API 注册钩子/触发器/动作
             adapter = _SharedAPIAdapter(api, self._shared_api)
@@ -347,6 +424,7 @@ class PluginManager:
         entry = self._entries.pop(plugin_id, None)
         if entry is None:
             return
+        self._detach_shared_registrations(entry)
         try:
             entry.plugin.on_unload()
         except Exception:
@@ -357,8 +435,14 @@ class PluginManager:
         for pid in list(self._entries.keys()):
             self.unload(pid)
 
-    def uninstall(self, plugin_id: str) -> tuple[bool, str]:
-        """卸载插件并从磁盘删除。
+    # ------------------------------------------------------------------ #
+    # 热重载
+    # ------------------------------------------------------------------ #
+
+    def reload_plugin(self, plugin_id: str) -> tuple[bool, str]:
+        """热重载插件：卸载后清理模块缓存并重新执行插件代码。
+
+        依赖本插件的功能插件不会自动重载（其引用已失效时需手动重载）。
 
         Returns
         -------
@@ -369,32 +453,85 @@ class PluginManager:
         if entry is None:
             return False, f"插件 {plugin_id} 未加载"
 
-        # 检查是否有其他插件依赖此插件
-        if entry.dependents:
-            names = []
-            for dep_id in entry.dependents:
-                dep_entry = self._entries.get(dep_id)
-                if dep_entry:
-                    names.append(dep_entry.meta.name)
-            if names:
-                return False, (
-                    f"无法卸载：以下插件依赖「{entry.meta.name}」\n"
-                    f"{', '.join(names)}\n"
-                    f"请先卸载这些依赖插件"
-                )
+        path = entry.path
+        if path is None or not path.exists():
+            return False, f"插件源文件不存在: {path}"
 
-        plugin_name = entry.meta.name
+        stem = path.stem
+        was_enabled = entry.enabled
 
-        # 1. 调用 on_unload
+        # 1. 卸载（含钩子/触发器注销）
         self.unload(plugin_id)
 
-        # 2. 清理 sys.modules 中的模块缓存
-        module_prefix = f"_plugin_{plugin_id}"
-        info_prefix = f"_plugin_info_{plugin_id}"
-        for mod_name in list(sys.modules.keys()):
-            if mod_name.startswith(module_prefix) or mod_name.startswith(info_prefix):
-                del sys.modules[mod_name]
-                logger.debug("已清理模块缓存: {}", mod_name)
+        # 2. 清理 sys.modules 中的模块缓存（模块名基于路径 stem 而非插件 id）
+        for prefix in (f"_plugin_{stem}", f"_plugin_info_{stem}"):
+            mod = sys.modules.pop(prefix, None)
+            if mod is not None:
+                logger.debug("热重载：已清理模块缓存 {}", prefix)
+
+        # 3. 清理字节码缓存：同尺寸的源码修改可能命中陈旧 .pyc（mtime+size 校验失效）
+        pycache = (path / "__pycache__") if path.is_dir() else (path.parent / "__pycache__")
+        if pycache.exists():
+            shutil.rmtree(pycache, ignore_errors=True)
+
+        # 4. 重新收集信息并加载
+        info = self._collect_plugin_info(path)
+        if info is None:
+            return False, f"插件 {plugin_id} 重新收集信息失败，查看日志"
+        self._load_from_info(info)
+
+        new_entry = self._entries.get(plugin_id)
+        if new_entry is None:
+            return False, f"插件 {plugin_id} 重载失败，查看日志"
+        if not was_enabled:
+            new_entry.enabled = False
+            self._detach_shared_registrations(new_entry)
+        return True, f"插件「{new_entry.meta.name}」已重载 (v{new_entry.meta.version})"
+
+    # ------------------------------------------------------------------ #
+    # 卸载（含磁盘删除）
+    # ------------------------------------------------------------------ #
+
+    def uninstall(self, plugin_id: str) -> tuple[bool, str]:
+        """卸载插件并从磁盘删除。
+
+        Returns
+        -------
+        tuple[bool, str]
+            (成功与否, 消息)
+        """
+        entry = self._entries.get(plugin_id)
+
+        if entry is not None:
+            # 检查是否有其他插件依赖此插件
+            if entry.dependents:
+                names = []
+                for dep_id in entry.dependents:
+                    dep_entry = self._entries.get(dep_id)
+                    if dep_entry:
+                        names.append(dep_entry.meta.name)
+                if names:
+                    return False, (
+                        f"无法卸载：以下插件依赖「{entry.meta.name}」\n"
+                        f"{', '.join(names)}\n"
+                        f"请先卸载这些依赖插件"
+                    )
+
+            plugin_name = entry.meta.name
+            module_stem = entry.path.stem if entry.path else plugin_id
+        else:
+            # 插件未加载（可能加载失败），按目录名兜底
+            plugin_name = plugin_id
+            module_stem = plugin_id
+
+        # 1. 调用 on_unload（若已加载）
+        self.unload(plugin_id)
+
+        # 2. 清理 sys.modules 中的模块缓存（模块名基于路径 stem）
+        for prefix in (f"_plugin_{module_stem}", f"_plugin_info_{module_stem}"):
+            mod = sys.modules.pop(prefix, None)
+            if mod is not None:
+                logger.debug("已清理模块缓存: {}", prefix)
 
         # 3. 从磁盘删除插件文件
         plugin_dir = PLUGINS_DIR / plugin_id
@@ -423,6 +560,9 @@ class PluginManager:
         if data_dir.exists():
             shutil.rmtree(data_dir, ignore_errors=True)
 
+        # 5. 移除持久化的权限授权
+        self.revoke_always_allow(plugin_id)
+
         logger.success("插件「{}」已卸载并删除", plugin_name)
         return True, f"插件「{plugin_name}」已卸载"
 
@@ -432,10 +572,43 @@ class PluginManager:
 
     def set_enabled(self, plugin_id: str, enabled: bool) -> None:
         entry = self.get_entry(plugin_id)
-        if entry:
-            entry.enabled = enabled
-            self._emit("enabled_changed", plugin_id, enabled)
-            logger.info("插件 {} 状态已更新: {}", plugin_id, "启用" if enabled else "禁用")
+        if entry is None or entry.enabled == enabled:
+            return
+        entry.enabled = enabled
+        if enabled:
+            # 重新挂回共享注册表（钩子/触发器/动作恢复生效）
+            self._attach_shared_registrations(entry)
+        else:
+            # 从共享注册表摘除，禁用的插件不再收到钩子事件
+            self._detach_shared_registrations(entry)
+        self._emit("enabled_changed", plugin_id, enabled)
+        logger.info("插件 {} 状态已更新: {}", plugin_id, "启用" if enabled else "禁用")
+
+    def _detach_shared_registrations(self, entry: PluginEntry) -> None:
+        """把插件的钩子/触发器/动作从共享 API 摘除（保留局部注册，便于恢复）"""
+        api = entry.api
+        shared = self._shared_api
+        for hook_type, callbacks in list(getattr(api, "_hooks", {}).items()):
+            for cb in callbacks:
+                shared.unregister_hook(hook_type, cb)
+        for trigger_id, handler in list(getattr(api, "_custom_triggers", {}).items()):
+            if shared._custom_triggers.get(trigger_id) is handler:
+                shared.unregister_trigger(trigger_id)
+        for action_id, executor in list(getattr(api, "_custom_actions", {}).items()):
+            if shared._custom_actions.get(action_id) is executor:
+                shared.unregister_action(action_id)
+
+    def _attach_shared_registrations(self, entry: PluginEntry) -> None:
+        """把插件的钩子/触发器/动作重新挂回共享 API"""
+        api = entry.api
+        shared = self._shared_api
+        for hook_type, callbacks in getattr(api, "_hooks", {}).items():
+            for cb in callbacks:
+                shared.register_hook(hook_type, cb)
+        for trigger_id, handler in getattr(api, "_custom_triggers", {}).items():
+            shared.register_trigger(trigger_id, handler)
+        for action_id, executor in getattr(api, "_custom_actions", {}).items():
+            shared.register_action(action_id, executor)
 
     def enable_plugin(self, plugin_id: str) -> None:
         self.set_enabled(plugin_id, True)

@@ -907,13 +907,28 @@ class ToolsPage(_DebugBasePage):
 
             for w in QApplication.instance().topLevelWidgets():
                 if isinstance(w, MainWindow):
-                    w._plugin_mgr.discover_and_load()
+                    mgr = w._plugin_mgr
+                    # 对已加载的插件做真正的热重载（重新执行插件代码），
+                    # 再扫描目录加载新出现的插件
+                    reloaded, failed = 0, []
+                    for entry in mgr.all_entries():
+                        if entry.path is None:
+                            continue
+                        ok, _msg = mgr.reload_plugin(entry.meta.id)
+                        if ok:
+                            reloaded += 1
+                        else:
+                            failed.append(entry.meta.id)
+                    mgr.discover_and_load()
                     w._refresh_plugin_navigations()
                     w.plugin_view._load_plugins()
                     w.widgets_view._load_widgets()
+                    content = f"已热重载 {reloaded} 个插件"
+                    if failed:
+                        content += f"，失败: {', '.join(failed)}"
                     InfoBar.success(
                         title="已重载",
-                        content="插件列表已刷新",
+                        content=content,
                         parent=self,
                         position=InfoBarPosition.TOP
                     )

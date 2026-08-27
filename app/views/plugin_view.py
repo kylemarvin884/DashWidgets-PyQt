@@ -813,7 +813,16 @@ class PluginView(ScrollArea):
             return
 
         if show_import_dialog(path, parent=self):
-            # 导入成功，刷新插件列表
+            from app.services.dw_package_service import read_dw_meta
+            meta = read_dw_meta(path) or {}
+            plugin_id = meta.get("id", "")
+
+            # 若是覆盖升级已加载的插件，热重载使其立即生效
+            reloaded_msg = ""
+            if plugin_id and self.manager.get_entry(plugin_id):
+                ok, msg = self.manager.reload_plugin(plugin_id)
+                reloaded_msg = msg if ok else f"热重载失败：{msg}"
+
             self.manager.discover_and_load()
             self._load_plugins()
             # 通知主窗口刷新导航
@@ -821,7 +830,7 @@ class PluginView(ScrollArea):
             if hasattr(window, '_refresh_plugin_navigations'):
                 window._refresh_plugin_navigations()
             from app.views.toast_notification import show_success
-            show_success("导入成功", "插件已安装，点击刷新或重启应用以生效")
+            show_success("导入成功", reloaded_msg or "插件已安装并加载")
 
     def _package_from_folder(self):
         """从文件夹选择插件目录并打包为 .dw 文件"""

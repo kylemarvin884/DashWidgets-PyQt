@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtGui import QPixmap, QImageReader, QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
     QFileDialog, QMenu,
@@ -16,6 +16,9 @@ from app.widgets.base_widget import WidgetBase, WidgetConfig
 from app.services.desktop_widget_service import Win11Style
 
 _SUPPORTED = "图片文件 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.avif *.svg)"
+
+# 加载时限制最长边：6000×4000 照片约 96MB 常驻内存，降到 2560 后约 17MB
+_MAX_EDGE = 2560
 
 
 class ImageWidget(WidgetBase):
@@ -72,8 +75,8 @@ class ImageWidget(WidgetBase):
             self._original_pixmap = None
             return
 
-        pm = QPixmap(self._image_path)
-        if pm.isNull():
+        pm = self._read_image()
+        if pm is None:
             self._label.clear()
             self._label.setText("加载失败")
             self._label.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
@@ -84,6 +87,20 @@ class ImageWidget(WidgetBase):
         self._label.setStyleSheet("background: transparent; border: none;")
         self._label.setCursor(Qt.CursorShape.ArrowCursor)
         self._fit_image()
+
+    def _read_image(self) -> QPixmap | None:
+        """读取图片并在解码阶段降采样，避免超大图常驻内存"""
+        reader = QImageReader(self._image_path)
+        reader.setAutoTransform(True)
+        size = reader.size()
+        if size.isValid() and max(size.width(), size.height()) > _MAX_EDGE:
+            reader.setScaledSize(size.scaled(_MAX_EDGE, _MAX_EDGE, Qt.AspectRatioMode.KeepAspectRatio))
+        img = reader.read()
+        if not img.isNull():
+            return QPixmap.fromImage(img)
+        # 解码器降采样失败时退回普通加载
+        pm = QPixmap(self._image_path)
+        return pm if not pm.isNull() else None
 
     def _fit_image(self) -> None:
         if self._original_pixmap is None or self._original_pixmap.isNull():

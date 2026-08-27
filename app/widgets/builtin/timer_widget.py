@@ -1,7 +1,7 @@
 """计时器小组件 — Win11 风格，支持预设时间和自定义时长"""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QElapsedTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -21,8 +21,11 @@ class TimerWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._remaining_ms = 5 * 60 * 1000
+        self._remaining_at_start = self._remaining_ms
+        self._clock = QElapsedTimer()  # 用单调时钟计时，避免 QTimer 累积漂移
         self._running = False
         self._finished = False
+        self._styled_finished: bool | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -115,7 +118,9 @@ class TimerWidget(WidgetBase):
             return
         self._running = not self._running
         if self._running:
-            self._tick.start(100)
+            self._remaining_at_start = self._remaining_ms
+            self._clock.restart()
+            self._tick.start(250)  # 显示精度为秒，250ms 足够流畅
         else:
             self._tick.stop()
         self._start_btn.setIcon(FIF.PAUSE if self._running else FIF.PLAY)
@@ -148,9 +153,9 @@ class TimerWidget(WidgetBase):
         self._update_display()
 
     def _on_tick(self) -> None:
-        self._remaining_ms -= 100
+        # 依据单调时钟计算剩余时间，不受 tick 抖动影响
+        self._remaining_ms = max(0, self._remaining_at_start - self._clock.elapsed())
         if self._remaining_ms <= 0:
-            self._remaining_ms = 0
             self._running = False
             self._finished = True
             self._tick.stop()
@@ -167,11 +172,14 @@ class TimerWidget(WidgetBase):
             self._time_label.setText(f"{hours}:{mins:02d}:{secs:02d}")
         else:
             self._time_label.setText(f"{mins:02d}:{secs:02d}")
-        if self._finished:
-            self._time_label.setStyleSheet("color: #e74856; background: transparent;")
-        else:
-            c = Win11Style.widget_colors()
-            self._time_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
+        # 仅在完成状态变化时更新样式，避免每 tick 重设样式表触发重绘
+        if self._styled_finished != self._finished:
+            self._styled_finished = self._finished
+            if self._finished:
+                self._time_label.setStyleSheet("color: #e74856; background: transparent;")
+            else:
+                c = Win11Style.widget_colors()
+                self._time_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
 
 
 class CustomTimerDialog(QDialog):

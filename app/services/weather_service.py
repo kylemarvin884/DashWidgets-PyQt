@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +49,9 @@ class WeatherService:
         self._initialized = True
         self._weather: Optional[WeatherData] = None
         self._location: Optional[tuple[float, float]] = None
+        self._city: str = ""
+        self._country: str = ""
+        self._fetch_lock = threading.Lock()  # 防止并发重复请求
         self._load_cache()
 
     # ------------------------------------------------------------------ #
@@ -56,7 +60,7 @@ class WeatherService:
 
     def get_location(self) -> tuple[float, float] | None:
         """
-        获取当前位置（经纬度）
+        获取当前位置（经纬度），同时缓存城市/国家信息
 
         Returns
         -------
@@ -78,6 +82,10 @@ class WeatherService:
                     lat = data.get("lat", 0)
                     lon = data.get("lon", 0)
                     self._location = (lat, lon)
+                    # 城市信息就在同一响应里，缓存起来避免二次请求
+                    if data.get("city"):
+                        self._city = data["city"]
+                        self._country = data.get("country", "")
                     logger.info(f"检测到位置: {lat}, {lon}")
                     return self._location
                 else:
@@ -90,13 +98,16 @@ class WeatherService:
 
     def get_location_info(self) -> tuple[str, str]:
         """
-        获取位置信息（城市、国家）
+        获取位置信息（城市、国家）— 优先使用已缓存的结果
 
         Returns
         -------
         tuple[str, str]
             (city, country)
         """
+        if self._city:
+            return self._city, self._country
+
         try:
             url = "http://ip-api.com/json/?fields=status,city,country"
             req = urllib.request.Request(url, headers={"User-Agent": "DashWidgets/1.0"})
@@ -107,6 +118,9 @@ class WeatherService:
                 if data.get("status") == "success":
                     city = data.get("city", "未知")
                     country = data.get("country", "")
+                    if city != "未知":
+                        self._city = city
+                        self._country = country
                     return city, country
                 else:
                     return "未知", ""
@@ -138,23 +152,32 @@ class WeatherService:
             if time.time() - self._weather.last_updated < self._CACHE_DURATION:
                 return self._weather
 
-        # 获取位置
-        location = self.get_location()
-        if not location:
-            # 使用默认位置（北京）
-            location = (39.9042, 116.4074)
-            logger.info("使用默认位置: 北京")
+        # 串行化网络获取：并发调用只会触发一次真实请求
+        with self._fetch_lock:
+            # 双重检查：等待锁期间其他线程可能已完成刷新
+            if not force_refresh and self._weather:
+                if time.time() - self._weather.last_updated < self._CACHE_DURATION:
+                    return self._weather
 
-        lat, lon = location
+            # 获取位置
+            location = self.get_location()
+            if not location:
+                # 使用默认位置（北京）
+                location = (39.9042, 116.4074)
+                if not self._city:
+                    self._city = "北京"
+                logger.info("使用默认位置: 北京")
 
-        try:
-            # 使用 Open-Meteo API 获取天气（免费、无需API Key）
-            url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
+            lat, lon = location
 
-            req = urllib.request.Request(url, headers={"User-Agent": "DashWidgets/1.0"})
+            try:
+                # 使用 Open-Meteo API 获取天气（免费、无需API Key）
+                url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
 
-            with urllib.request.urlopen(req, timeout=10) as response:
-                data = json.loads(response.read().decode("utf-8"))
+                req = urllib.request.Request(url, headers={"User-Agent": "DashWidgets/1.0"})
+
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode("utf-8"))
 
                 current = data.get("current", {})
 
@@ -164,7 +187,7 @@ class WeatherService:
                 wind_speed = current.get("wind_speed_10m", 0)
                 weather_code = current.get("weather_code", 0)
 
-                # 获取城市名称
+                # 获取城市名称（命中缓存时无网络请求）
                 city, country = self.get_location_info()
 
                 # 转换天气代码为文字描述和图标
@@ -185,12 +208,12 @@ class WeatherService:
                 logger.info(f"获取天气成功: {city} {temperature}°C {condition}")
                 return self._weather
 
-        except Exception as e:
-            logger.error(f"获取天气失败: {e}")
-            # 返回缓存数据
-            if self._weather:
-                return self._weather
-            return None
+            except Exception as e:
+                logger.error(f"获取天气失败: {e}")
+                # 返回缓存数据
+                if self._weather:
+                    return self._weather
+                raise
 
     def _weather_code_to_text(self, code: int) -> tuple[str, str]:
         """
@@ -245,6 +268,8 @@ class WeatherService:
                 data = json.load(f)
 
             self._location = tuple(data.get("location", [])) if data.get("location") else None
+            self._city = data.get("city", "")
+            self._country = data.get("country", "")
 
             weather_data = data.get("weather")
             if weather_data:
@@ -262,6 +287,8 @@ class WeatherService:
 
             data = {
                 "location": list(self._location) if self._location else None,
+                "city": self._city,
+                "country": self._country,
                 "weather": self._weather.__dict__ if self._weather else None,
             }
 

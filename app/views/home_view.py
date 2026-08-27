@@ -18,7 +18,6 @@ from qfluentwidgets import (
 from app.models.widget_model import WidgetModel
 from app.services.usage_tracker import UsageStatsService
 from app.services.desktop_widget_service import Win11Style
-from loguru import logger
 
 
 class _StatCard(CardWidget):
@@ -117,15 +116,16 @@ class _ActiveChip(CardWidget):
 
 
 class _RankRow(QWidget):
-    """排行榜单行 — 名次 + 图标 + 名称 + 评分 + 进度条 + 时长 + 次数"""
+    """排行榜单行 — 名次 + 图标 + 名称 + 评分 + 进度条 + 时长 + 次数（支持原地更新）"""
 
-    def __init__(self, rank: int, w, score: float, total_sec: float, sessions: int, parent=None):
+    def __init__(self, rank: int, w, score: float, total_sec: float, sessions: int, parent=None, top_score: float = 1.0):
         super().__init__(parent)
         self._rank = rank
         self._w = w
         self._score = score
         self._total_sec = total_sec
         self._sessions = sessions
+        self._top_score = max(top_score, score, 1.0)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -145,12 +145,12 @@ class _RankRow(QWidget):
         # 名次
         rank_colors = {1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32"}
         rc = rank_colors.get(self._rank, c["text_secondary"])
-        rank_lbl = StrongBodyLabel(f"#{self._rank}")
-        rank_lbl.setFixedWidth(28)
-        rank_lbl.setStyleSheet(
+        self._rank_lbl = StrongBodyLabel(f"#{self._rank}")
+        self._rank_lbl.setFixedWidth(28)
+        self._rank_lbl.setStyleSheet(
             f"font-size:15px;font-weight:700;color:{rc};background:transparent;"
         )
-        lay.addWidget(rank_lbl)
+        lay.addWidget(self._rank_lbl)
 
         # 图标
         icon = IconWidget(getattr(FIF, self._w.icon_name, FIF.APPLICATION), self)
@@ -165,63 +165,95 @@ class _RankRow(QWidget):
         name_lbl = BodyLabel(self._w.name)
         name_lbl.setStyleSheet(f"color:{c['text_primary']};background:transparent;")
         name_lay.addWidget(name_lbl)
-        if self._w.is_active:
-            active_lbl = CaptionLabel("启用中")
-            active_lbl.setStyleSheet(
-                "color:#5db872;background:transparent;font-size:10px;padding:1px 6px;"
-                "border:1px solid #5db872;border-radius:6px;"
-            )
-            name_lay.addWidget(active_lbl)
+        self._active_lbl = CaptionLabel("启用中")
+        self._active_lbl.setStyleSheet(
+            "color:#5db872;background:transparent;font-size:10px;padding:1px 6px;"
+            "border:1px solid #5db872;border-radius:6px;"
+        )
+        name_lay.addWidget(self._active_lbl)
+        self._active_lbl.setVisible(bool(self._w.is_active))
         name_lay.addStretch()
         lay.addWidget(name_w, stretch=1)
 
         # 进度条表示使用程度 (相对最高分)
-        bar = QProgressBar()
-        bar.setFixedSize(60, 4)
-        bar.setTextVisible(False)
-        bar.setStyleSheet(
+        self._bar = QProgressBar()
+        self._bar.setFixedSize(60, 4)
+        self._bar.setTextVisible(False)
+        self._bar.setStyleSheet(
             f"QProgressBar{{background:{c['divider']};border:none;border-radius:2px;}}"
             f"QProgressBar::chunk{{background:{c['accent']};border-radius:2px;}}"
         )
-        bar.setRange(0, 100)
-        bar.setValue(40 + self._rank * -8 if self._rank <= 5 else 20)  # 越靠前越长
-        lay.addWidget(bar)
+        self._bar.setRange(0, 100)
+        lay.addWidget(self._bar)
 
         # 时长
-        if self._total_sec >= 3600:
-            time_str = f"{self._total_sec / 3600:.1f}h"
-        else:
-            time_str = f"{int(self._total_sec / 60)}m"
-        time_lbl = CaptionLabel(time_str)
-        time_lbl.setFixedWidth(40)
-        time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        time_lbl.setStyleSheet(f"color:{c['text_secondary']};background:transparent;")
-        lay.addWidget(time_lbl)
+        self._time_lbl = CaptionLabel(self._fmt_time(self._total_sec))
+        self._time_lbl.setFixedWidth(40)
+        self._time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._time_lbl.setStyleSheet(f"color:{c['text_secondary']};background:transparent;")
+        lay.addWidget(self._time_lbl)
 
         # 次数
-        cnt_lbl = CaptionLabel(f"{self._sessions}次")
-        cnt_lbl.setFixedWidth(32)
-        cnt_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        cnt_lbl.setStyleSheet(f"color:{c['text_secondary']};background:transparent;")
-        lay.addWidget(cnt_lbl)
+        self._cnt_lbl = CaptionLabel(f"{self._sessions}次")
+        self._cnt_lbl.setFixedWidth(32)
+        self._cnt_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._cnt_lbl.setStyleSheet(f"color:{c['text_secondary']};background:transparent;")
+        lay.addWidget(self._cnt_lbl)
+
+        self._apply_score(self._score)
+
+    @staticmethod
+    def _fmt_time(total_sec: float) -> str:
+        if total_sec >= 3600:
+            return f"{total_sec / 3600:.1f}h"
+        return f"{int(total_sec / 60)}m"
+
+    def _apply_score(self, score: float):
+        """进度条长度 = 该组件得分相对榜首得分的比例"""
+        ratio = max(0.06, min(1.0, score / self._top_score)) if self._top_score > 0 else 0.06
+        self._bar.setValue(int(ratio * 100))
+
+    def update_data(self, rank: int, score: float, total_sec: float, sessions: int, top_score: float):
+        """原地更新数值，避免整行销毁重建"""
+        if rank != self._rank:
+            self._rank = rank
+            rank_colors = {1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32"}
+            rc = rank_colors.get(rank, Win11Style.c()["text_secondary"])
+            self._rank_lbl.setText(f"#{rank}")
+            self._rank_lbl.setStyleSheet(
+                f"font-size:15px;font-weight:700;color:{rc};background:transparent;"
+            )
+        self._active_lbl.setVisible(bool(self._w.is_active))
+        self._top_score = max(top_score, score, 1.0)
+        self._apply_score(score)
+        self._time_lbl.setText(self._fmt_time(total_sec))
+        self._cnt_lbl.setText(f"{sessions}次")
 
 
 class HomeView(QFrame):
-    """主页仪表板 — 实时刷新，以使用排行为主体"""
+    """主页仪表板 — 事件驱动刷新，以使用排行为主体"""
+
+    # 数值 Tick 周期：只更新标签文本（使用时长会随进行中的会话增长）
+    _TICK_MS = 30_000
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent=parent)
         self.setObjectName("homeView")
         self._widget_model = WidgetModel()
         self._usage_tracker = UsageStatsService()
+        self._rows: dict[str, _RankRow] = {}
+        self._row_order: list[str] = []
 
-        # 实时刷新：每秒更新
-        self._refresh_timer = QTimer(self)
-        self._refresh_timer.timeout.connect(self._auto_refresh)
-        self._refresh_timer.start(1000)
-
-        # 小组件状态变化时立即刷新
+        # 组件状态变化（增删启停）时全量刷新
         self._widget_model.widgets_changed.connect(self.refresh)
+        from app.services.desktop_widget_service import widget_signals
+        widget_signals.widget_shown.connect(self._on_widget_activity)
+        widget_signals.widget_closed.connect(self._on_widget_activity)
+
+        # 慢速 tick：仅原地更新数值文本，不重建任何控件
+        self._tick_timer = QTimer(self)
+        self._tick_timer.setInterval(self._TICK_MS)
+        self._tick_timer.timeout.connect(self._tick_numbers)
 
         # 主题变化
         qconfig.themeChanged.connect(self._on_theme_changed)
@@ -231,6 +263,11 @@ class HomeView(QFrame):
         self._stat_time: _StatCard | None = None
 
         self._build_ui()
+        self._tick_timer.start()
+
+    def _on_widget_activity(self, widget_id: str):
+        """桌面组件显示/关闭：全量刷新（含排行数据落盘后的更新）"""
+        self.refresh()
 
     # ------------------------------------------------------------------ #
     #  UI 构建
@@ -372,15 +409,36 @@ class HomeView(QFrame):
     # ------------------------------------------------------------------ #
 
     def refresh(self):
-        """全量刷新"""
+        """全量刷新（组件集合变化时调用）"""
         self._refresh_stats()
         self._refresh_active()
         self._refresh_leaderboard()
 
-    def _auto_refresh(self):
-        """定时刷新（仅在可见时）"""
-        if self.isVisible():
-            self.refresh()
+    def _tick_numbers(self):
+        """慢速数值更新：仅刷新文本，无控件销毁/创建"""
+        if not self.isVisible():
+            return
+        all_w = self._widget_model.get_all_widgets()
+        total_time = sum(self._usage_tracker.get_live_total_time(w.id) for w in all_w)
+        if self._stat_time:
+            if total_time >= 3600:
+                self._stat_time.set_value(f"{total_time / 3600:.1f}h")
+            else:
+                self._stat_time.set_value(f"{int(total_time / 60)}m")
+
+        entries = []
+        for w in all_w:
+            t = self._usage_tracker.get_live_total_time(w.id)
+            s = self._usage_tracker.get_live_score(w.id)
+            n = self._usage_tracker.get_session_count(w.id)
+            if w.is_active:
+                n += 1  # 进行中的会话尚未落盘，展示时 +1
+            entries.append((w, s, t, n))
+        top_score = max((e[1] for e in entries), default=0.0)
+        for rank, (w, s, t, n) in enumerate(entries, start=1):
+            row = self._rows.get(w.id)
+            if row:
+                row.update_data(rank, s, t, n, top_score)
 
     def _on_theme_changed(self):
         """主题切换重建"""
@@ -396,7 +454,7 @@ class HomeView(QFrame):
     def _refresh_stats(self):
         all_w = self._widget_model.get_all_widgets()
         active = [w for w in all_w if w.is_active]
-        total_time = sum(self._usage_tracker.get_total_time(w.id) for w in all_w)
+        total_time = sum(self._usage_tracker.get_live_total_time(w.id) for w in all_w)
 
         if self._stat_active:
             self._stat_active.set_value(str(len(active)))
@@ -438,43 +496,66 @@ class HomeView(QFrame):
     # ------------------------------------------------------------------ #
 
     def _refresh_leaderboard(self):
-        while self._board_lay.count():
-            item = self._board_lay.takeAt(0)
-            if isinstance(item, QVBoxLayout):
-                self._clear_layout(item)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                self._clear_layout(item.layout())
-
-        # 收集所有有使用记录的组件
-        scores: list[tuple] = []
+        # 收集所有组件的实时使用数据
+        entries: list[tuple] = []
         for w in self._widget_model.get_all_widgets():
-            t = self._usage_tracker.get_total_time(w.id)
-            s = self._usage_tracker.get_score(w.id)
+            t = self._usage_tracker.get_live_total_time(w.id)
+            s = self._usage_tracker.get_live_score(w.id)
             n = self._usage_tracker.get_session_count(w.id)
-            scores.append((w, s, t, n))
+            if w.is_active:
+                n += 1  # 进行中的会话尚未落盘
+            entries.append((w, s, t, n))
         # 按得分降序排列，得分相同按时长
-        scores.sort(key=lambda x: (x[1], x[2]), reverse=True)
+        entries.sort(key=lambda x: (x[1], x[2]), reverse=True)
 
-        if not scores or all(s[1] == 0 for s in scores):
-            lbl = CaptionLabel("暂无使用记录，启用组件后会开始统计")
-            lbl.setStyleSheet(
-                f"color:{Win11Style.c()['text_secondary']};background:transparent;padding:16px;"
-            )
-            self._board_lay.addWidget(lbl)
+        has_data = any(s[1] > 0 or s[2] > 0 for s in entries)
+        if not has_data:
+            self._clear_rows()
+            self._show_board_placeholder()
             return
 
         # 显示前 10 名
-        for i, (w, sc, tm, cnt) in enumerate(scores[:10]):
-            row = _RankRow(i + 1, w, sc, tm, cnt)
-            self._board_lay.addWidget(row)
+        top = entries[:10]
+        top_score = max(e[1] for e in top)
 
-    @staticmethod
-    def _clear_layout(layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
+        new_order = [w.id for w, *_ in top]
+        if new_order == self._row_order:
+            # 组件集合未变：原地更新数值
+            for rank, (w, s, t, n) in enumerate(top, start=1):
+                row = self._rows.get(w.id)
+                if row:
+                    row.update_data(rank, s, t, n, top_score)
+            return
+
+        # 集合变化：整表重建
+        self._clear_rows()
+        self._remove_board_placeholder()
+        for rank, (w, s, t, n) in enumerate(top, start=1):
+            row = _RankRow(rank, w, s, t, n, top_score=top_score)
+            self._rows[w.id] = row
+            self._board_lay.addWidget(row)
+        self._row_order = new_order
+
+    def _clear_rows(self):
+        for row in self._rows.values():
+            row.setParent(None)
+            row.deleteLater()
+        self._rows.clear()
+        self._row_order.clear()
+
+    def _show_board_placeholder(self):
+        self._remove_board_placeholder()
+        lbl = CaptionLabel("暂无使用记录，启用组件后会开始统计")
+        lbl.setObjectName("boardPlaceholder")
+        lbl.setStyleSheet(
+            f"color:{Win11Style.c()['text_secondary']};background:transparent;padding:16px;"
+        )
+        self._board_lay.addWidget(lbl)
+
+    def _remove_board_placeholder(self):
+        for i in range(self._board_lay.count()):
+            item = self._board_lay.itemAt(i)
+            if item.widget() and item.widget().objectName() == "boardPlaceholder":
+                item.widget().setParent(None)
                 item.widget().deleteLater()
-            elif item.layout():
-                HomeView._clear_layout(item.layout())
+                break

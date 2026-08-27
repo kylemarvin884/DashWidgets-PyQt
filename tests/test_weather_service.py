@@ -50,18 +50,18 @@ class TestWeatherService:
             delattr(WeatherService, "_initialized")
 
     def test_weather_code_to_text_known_codes(self):
-        """已知天气代码转换测试"""
+        """已知天气代码转换测试（icon 为 FluentIcon 名称）"""
         svc = WeatherService()
 
         test_cases = [
-            (0, "晴朗", "☀️"),
-            (1, "大部晴朗", "🌤️"),
-            (2, "多云", "⛅"),
-            (3, "阴天", "☁️"),
-            (45, "有雾", "🌫️"),
-            (61, "小雨", "🌧️"),
-            (71, "小雪", "🌨️"),
-            (95, "雷暴", "⛈️"),
+            (0, "晴朗", "SUNNY"),
+            (1, "大部晴朗", "PARTLY_SUNNY"),
+            (2, "多云", "CLOUD"),
+            (3, "阴天", "CLOUD"),
+            (45, "有雾", "FOG"),
+            (61, "小雨", "RAIN"),
+            (71, "小雪", "SNOW"),
+            (95, "雷暴", "THUNDER"),
         ]
 
         for code, expected_condition, expected_icon in test_cases:
@@ -74,7 +74,7 @@ class TestWeatherService:
         svc = WeatherService()
         condition, icon = svc._weather_code_to_text(99999)
         assert condition == "未知"
-        assert icon == "🌡️"
+        assert icon == "WEATHER"
 
     def test_singleton(self):
         """单例模式测试"""
@@ -83,7 +83,7 @@ class TestWeatherService:
         assert svc1 is svc2
 
     def test_cache_load_save(self, tmp_path: Path, monkeypatch):
-        """缓存加载/保存测试"""
+        """缓存加载/保存测试（含城市信息持久化）"""
         cache_file = tmp_path / "weather_cache.json"
         monkeypatch.setattr("app.services.weather_service.WeatherService._CACHE_FILE", cache_file)
 
@@ -92,7 +92,7 @@ class TestWeatherService:
         svc1._weather = WeatherData(
             temperature=22.0,
             condition="多云",
-            icon="⛅",
+            icon="CLOUD",
             humidity=55,
             wind_speed=8.5,
             city="上海",
@@ -114,3 +114,67 @@ class TestWeatherService:
         assert svc2._weather.city == "上海"
         assert svc2._weather.temperature == 22.0
         assert svc2._location == (31.2304, 121.4737)
+
+    def test_get_weather_uses_cache(self):
+        """缓存未过期时不发起网络请求"""
+        import time
+
+        svc = WeatherService()
+        svc._weather = WeatherData(
+            temperature=20.0, condition="晴朗", icon="SUNNY",
+            humidity=50, wind_speed=5.0, city="北京", country="CN",
+            last_updated=time.time(),
+        )
+        # get_location 若被调用会走网络；这里直接返回证明命中缓存路径
+        result = svc.get_weather()
+        assert result is svc._weather
+
+    def test_get_weather_concurrent_dedup(self, monkeypatch):
+        """并发调用只触发一次真实获取"""
+        import threading
+        import time
+
+        svc = WeatherService()
+        calls = {"n": 0}
+
+        def _fake_location(self):
+            return (39.9, 116.4)
+
+        def _fake_location_info(self):
+            return ("北京", "CN")
+
+        monkeypatch.setattr(WeatherService, "get_location", _fake_location)
+        monkeypatch.setattr(WeatherService, "get_location_info", _fake_location_info)
+
+        def _slow_fetch(req, timeout=0):
+            calls["n"] += 1
+            time.sleep(0.05)
+
+            class _Resp:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+                def read(self):
+                    return ('{"current": {"temperature_2m": 21, "relative_humidity_2m": 40,'
+                            ' "weather_code": 0, "wind_speed_10m": 3}}').encode()
+
+            return _Resp()
+
+        monkeypatch.setattr("app.services.weather_service.urllib.request.urlopen", _slow_fetch)
+
+        results = []
+
+        def _worker():
+            results.append(svc.get_weather())
+
+        threads = [threading.Thread(target=_worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert calls["n"] == 1, f"expected 1 fetch, got {calls['n']}"
+        assert all(r is not None and r.temperature == 21 for r in results)

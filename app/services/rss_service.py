@@ -213,24 +213,43 @@ class RSSService:
             with open(self._FEEDS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            for url, feed_data in data.get("feeds", {}).items():
-                items = [
-                    RSSItem(**item_data)
-                    for item_data in feed_data.get("items", [])
-                ]
-                self._feeds[url] = RSSFeed(
-                    url=url,
-                    title=feed_data.get("title", ""),
-                    description=feed_data.get("description", ""),
-                    items=items,
-                    last_updated=feed_data.get("last_updated", 0.0),
-                    error=feed_data.get("error", ""),
-                )
+            raw_feeds = data.get("feeds", {})
+            if isinstance(raw_feeds, list):
+                # 旧版格式：feeds 为列表 [{url, title, items, ...}]
+                for item in raw_feeds:
+                    if not isinstance(item, dict):
+                        continue
+                    url = item.get("url")
+                    if not url:
+                        continue
+                    self._feeds[url] = self._feed_from_dict(url, item)
+            elif isinstance(raw_feeds, dict):
+                # 当前格式：feeds 为字典 {url: {title, items, ...}}
+                for url, feed_data in raw_feeds.items():
+                    if not isinstance(feed_data, dict):
+                        continue
+                    self._feeds[url] = self._feed_from_dict(url, feed_data)
 
             logger.info(f"加载了 {len(self._feeds)} 个RSS源")
 
         except Exception as e:
             logger.error(f"加载RSS配置失败: {e}")
+
+    def _feed_from_dict(self, url: str, feed_data: dict) -> RSSFeed:
+        """从持久化字典重建 RSSFeed"""
+        items = [
+            RSSItem(**item_data)
+            for item_data in feed_data.get("items", [])
+            if isinstance(item_data, dict)
+        ]
+        return RSSFeed(
+            url=url,
+            title=feed_data.get("title", ""),
+            description=feed_data.get("description", ""),
+            items=items,
+            last_updated=feed_data.get("last_updated", 0.0),
+            error=feed_data.get("error", ""),
+        )
 
     def _save_feeds(self):
         """保存RSS源配置"""
@@ -269,7 +288,7 @@ class RSSService:
             logger.error(f"保存RSS配置失败: {e}")
 
     def _create_default_feeds(self):
-        """创建默认RSS源配置"""
+        """创建默认RSS源配置（只写入配置，内容由后续异步刷新获取）"""
         # 添加一些默认的RSS源示例
         default_feeds = [
             ("https://sspai.com/feed", "少数派"),
@@ -281,10 +300,6 @@ class RSSService:
             self._feeds[url] = feed
 
         self._save_feeds()
-
-        # 尝试刷新内容
-        for url in self._feeds:
-            self.refresh_feed(url)
 
     # ------------------------------------------------------------------ #
     # 工具方法

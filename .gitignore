@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 构建产物
+build/
+dist/
+
+# 运行时数据
+data/
+temp/
+config/exchange_cache.json
+
+# IDE
+.idea/
+.vscode/
+
+# uv
+# uv.lock 应提交（锁定依赖版本）
