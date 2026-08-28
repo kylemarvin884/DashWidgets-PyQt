@@ -13,7 +13,10 @@ from typing import Any, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QHBoxLayout, QApplication, QSizePolicy,
 )
-from PySide6.QtCore import Qt, QTimer, QEvent, QPoint, QSize, QObject, Signal, QRectF
+from PySide6.QtCore import (
+    Qt, QTimer, QEvent, QPoint, QSize, QObject, Signal, QRectF,
+    QPropertyAnimation, QEasingCurve, QAbstractAnimation,
+)
 from PySide6.QtGui import QColor, QFont, QAction, QCursor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath, QTransform
 
 from loguru import logger
@@ -594,6 +597,28 @@ class DesktopWidgetWindow(QWidget):
             if self._is_frameless:
                 _make_fully_transparent(hwnd)
                 QTimer.singleShot(50, lambda: _make_fully_transparent(_get_window_handle(self)))
+        self._play_show_fade()
+
+    def _play_show_fade(self) -> None:
+        """显示时快速淡入（Fluent 150ms，OutCubic）— 每次显示都播放"""
+        if getattr(self, "_fading_in", False):
+            return
+        self._fading_in = True
+        self.setWindowOpacity(0.0)
+        anim = QPropertyAnimation(self, b"windowOpacity", self)
+        anim.setDuration(150)
+        anim.setStartValue(0.0)
+        anim.setEndValue(getattr(self, "_target_opacity", 1.0))
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        def _done():
+            self._fading_in = False
+            # 尊重外观设置里的透明度（_apply_window_settings 可能改过）
+            self.setWindowOpacity(getattr(self, "_target_opacity", 1.0))
+            anim.deleteLater()
+
+        anim.finished.connect(_done)
+        anim.start(QAbstractAnimation.DeletionPolicy.KeepWhenStopped)
 
     def _build_context_menu(self) -> tuple:
         """构建统一右键菜单（组件专属动作 + 系统项），返回 (menu, actions)"""
@@ -761,7 +786,9 @@ class DesktopWidgetWindow(QWidget):
         if opacity_val is not None:
             v = float(opacity_val)
             op = v if v <= 1.0 else v / 100.0
-            self.setWindowOpacity(op)
+            self._target_opacity = op  # 淡入动画以此为终点
+            if not getattr(self, "_fading_in", False):
+                self.setWindowOpacity(op)
 
         # 颜色（支持 "color" 和 "text_color" 两种 key）
         color_val = settings.get("color") or settings.get("text_color")

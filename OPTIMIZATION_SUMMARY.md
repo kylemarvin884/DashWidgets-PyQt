@@ -3,6 +3,17 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第八轮：主页排版对齐 Fluent 2 + 动效（2026-08-29）
+
+- **主页字阶对齐 Fluent Type Ramp**：页面标题 36px 衬线 → Display 28px Regular（Segoe UI Variable Display）；分区标题（已启用的组件/使用排行）22px 衬线 → Subtitle 20px Semibold；表头/徽章统一 Caption 12px。
+- **主页排版节奏**：页面边距 40px、分区间距 24px、卡片间距 8px（Fluent 8px 节奏）；统计卡片改头部「图标+标签」行 + Display 数值的卡片模式（28px Regular，原衬线 28px），高度 72→84。
+- **去品牌化硬编码色**：排行榜前三名金银铜（#FFD700 等）→ 前三名用主题强调色、其余次要色（Fluent 无金属色概念）；统计卡三色图标统一主题强调色。
+- **动效（Fluent 标准参数）**：
+  - 主页首次切入：分区 150ms 淡入 + 24px 上移（OutCubic），40ms 阶梯延迟依次入场；
+  - 桌面组件显示：150ms 窗口透明度淡入（OutCubic），尊重外观设置的目标透明度；
+  - 排行进度条数值变化：250ms OutCubic 缓动。
+- 动画宿主均为父控件（随父销毁），淡入幂等防重入。
+
 ## 第七轮：Fluent 2 菜单与组件样式对齐（2026-08-29）
 
 - **统一 WinUI MenuFlyout 规格菜单**（`Win11Style.menu_qss()`，托盘菜单与桌面组件右键菜单共用）：8px 外圆角、1px 卡片描边、条目 14px Segoe UI Variable Text + 4px 选中圆角、subtle 悬停叠层、1px 分隔线、图标左缘 8px 内边距。
