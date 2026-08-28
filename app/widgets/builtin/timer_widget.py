@@ -176,7 +176,7 @@ class TimerWidget(WidgetBase):
         if self._styled_finished != self._finished:
             self._styled_finished = self._finished
             if self._finished:
-                self._time_label.setStyleSheet("color: #e74856; background: transparent;")
+                self._time_label.setStyleSheet(f"color: {Win11Style.c()['danger']}; background: transparent;")
             else:
                 c = Win11Style.widget_colors()
                 self._time_label.setStyleSheet(f"color: {c['text']}; background: transparent;")

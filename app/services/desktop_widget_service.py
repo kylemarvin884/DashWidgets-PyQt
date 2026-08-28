@@ -183,47 +183,47 @@ widget_signals = _WidgetSignals()
 # ── Win11 风格工具类 ─────────────────────────────────────────────── #
 
 class Win11Style:
-    """Claude 风格设计系统 — 奶油画布 + 珊瑚红 + 深海军蓝"""
+    """Fluent Design 配色 — WinUI 3 官方 token（浅色层叠 / 深色层叠）"""
 
-    # 字体：衬线标题 + 人文无衬线正文
-    FONT_SERIF = 'Georgia, Cambria, "Times New Roman", serif'
-    FONT_SANS = '"Segoe UI Variable", "Segoe UI", Inter, sans-serif'
+    # 字体：Fluent 用 Segoe UI Variable（Display 用于大标题）
+    FONT_SERIF = '"Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif'
+    FONT_SANS = '"Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif'
     FONT_FAMILY = FONT_SANS  # 兼容旧引用
 
-    # ── 浅色模式：奶油画布 ── #
+    # ── 浅色（WinUI 3 Light，Layer/Mica 底 + 白卡片 + 系统蓝）── #
     _LIGHT = {
-        "bg": "#faf9f5",              # canvas 奶油画布
-        "card_bg": "#efe9de",         # surface-card 浅奶油卡片
-        "card_border": "#e6dfd8",     # hairline 细线
-        "text_primary": "#141413",    # ink 暖墨黑
-        "text_secondary": "#6c6a64",  # muted 柔灰
-        "accent": "#cc785c",          # primary 珊瑚红
-        "accent_hover": "#a9583e",    # primary-active
-        "danger": "#c64545",          # error
-        "success": "#5db872",         # success 绿
-        "warning": "#d4a017",         # warning
-        "divider": "#ebe6df",         # hairline-soft
-        "surface_soft": "#f5f0e8",    # surface-soft
-        "surface_dark": "#181715",    # surface-dark 深海军蓝
-        "on_dark": "#faf9f5",         # on-dark
+        "bg": "#f9f9f9",              # SolidBackgroundFillColorBase
+        "card_bg": "#ffffff",         # LayerFillColorDefault（卡片白）
+        "card_border": "#ebebeb",     # CardStrokeColorDefault
+        "text_primary": "#1a1a1a",    # TextFillColorPrimary 近似
+        "text_secondary": "#5f5f5f",  # TextFillColorSecondary 近似
+        "accent": "#0078d4",          # SystemAccentColor
+        "accent_hover": "#106ebe",    # InteractionColorHover
+        "danger": "#c42b1c",          # SystemFillColorCritical
+        "success": "#0f7b0f",         # SystemFillColorSuccess
+        "warning": "#9d5d00",         # SystemFillColorCaution
+        "divider": "#ebebeb",         # DividerStrokeColorDefault
+        "surface_soft": "#f5f5f5",    # ControlFillColorDefault 近似
+        "surface_dark": "#202020",    # 深色底（弹层用）
+        "on_dark": "#ffffff",
     }
 
-    # ── 深色模式：深海军蓝 ── #
+    # ── 深色（WinUI 3 Dark，#202020 底 + 灰层卡片 + 浅蓝强调）── #
     _DARK = {
-        "bg": "#181715",              # surface-dark
-        "card_bg": "#252320",         # surface-dark-elevated
-        "card_border": "#3d3a35",     # 深色细线
-        "text_primary": "#faf9f5",    # on-dark 奶油白
-        "text_secondary": "#a09d96",  # on-dark-soft
-        "accent": "#cc785c",          # 珊瑚红（深浅一致）
-        "accent_hover": "#a9583e",
-        "danger": "#e07070",
-        "success": "#6ccb5f",
-        "warning": "#e8a55a",
-        "divider": "#2f2c28",
-        "surface_soft": "#1f1e1b",    # surface-dark-soft
-        "surface_dark": "#181715",
-        "on_dark": "#faf9f5",
+        "bg": "#202020",              # SolidBackgroundFillColorBase
+        "card_bg": "#2b2b2b",         # LayerFillColorDefault
+        "card_border": "#383838",     # CardStrokeColorDefault
+        "text_primary": "#ffffff",    # TextFillColorPrimary
+        "text_secondary": "#c8c8c8",  # TextFillColorSecondary 近似
+        "accent": "#4cc2ff",          # SystemAccentColorLight2
+        "accent_hover": "#99ebff",    # InteractionColorHover 近似
+        "danger": "#ff99a4",          # SystemFillColorCritical
+        "success": "#6ccb5f",         # SystemFillColorSuccess
+        "warning": "#fce100",         # SystemFillColorCaution
+        "divider": "#2d2d2d",         # DividerStrokeColorDefault
+        "surface_soft": "#272727",    # ControlFillColorDefault 近似
+        "surface_dark": "#202020",
+        "on_dark": "#ffffff",
     }
 
     @classmethod
@@ -236,29 +236,29 @@ class Win11Style:
 
     @classmethod
     def widget_colors(cls) -> dict[str, str]:
-        """桌面小组件内文字/标签颜色"""
+        """桌面小组件内文字/标签颜色（中性 Fluent 文本色）"""
         if cls.is_dark():
             return {
-                "title": "rgba(250,249,245,0.55)",
-                "text": "rgba(250,249,245,0.85)",
-                "text_secondary": "rgba(250,249,245,0.45)",
-                "text_dim": "rgba(250,249,245,0.30)",
-                "accent": "#cc785c",
-                "bg_input": "rgba(250,249,245,0.06)",
-                "border_input": "rgba(250,249,245,0.08)",
-                "separator": "rgba(250,249,245,0.08)",
-                "track": "rgba(250,249,245,0.12)",
+                "title": "rgba(255,255,255,0.50)",
+                "text": "rgba(255,255,255,0.89)",
+                "text_secondary": "rgba(255,255,255,0.60)",
+                "text_dim": "rgba(255,255,255,0.35)",
+                "accent": "#4cc2ff",
+                "bg_input": "rgba(255,255,255,0.05)",
+                "border_input": "rgba(255,255,255,0.07)",
+                "separator": "rgba(255,255,255,0.08)",
+                "track": "rgba(255,255,255,0.12)",
             }
         return {
-            "title": "rgba(20,20,19,0.45)",
-            "text": "rgba(20,20,19,0.85)",
-            "text_secondary": "rgba(20,20,19,0.45)",
-            "text_dim": "rgba(20,20,19,0.25)",
-            "accent": "#cc785c",
-            "bg_input": "rgba(20,20,19,0.04)",
-            "border_input": "#e6dfd8",
-            "separator": "#ebe6df",
-            "track": "rgba(20,20,19,0.08)",
+            "title": "rgba(0,0,0,0.45)",
+            "text": "rgba(0,0,0,0.90)",
+            "text_secondary": "rgba(0,0,0,0.55)",
+            "text_dim": "rgba(0,0,0,0.35)",
+            "accent": "#0078d4",
+            "bg_input": "rgba(0,0,0,0.04)",
+            "border_input": "#e5e5e5",
+            "separator": "#ebebeb",
+            "track": "rgba(0,0,0,0.08)",
         }
 
     @classmethod
@@ -279,7 +279,7 @@ class Win11Style:
 class DesktopWidgetWindow(QWidget):
     """单个桌面小组件的窗口（无边框、可拖拽、可缩放、右键菜单、毛玻璃效果）"""
 
-    CORNER_RADIUS = 16
+    CORNER_RADIUS = 8   # Fluent 卡片圆角
     BORDER_WIDTH = 1
 
     def __init__(self, widget_info: WidgetInfo, widget_instance: QWidget | None = None, parent=None):

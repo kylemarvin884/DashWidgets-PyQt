@@ -82,6 +82,7 @@ class _ActiveChip(CardWidget):
 
     def _setup_ui(self):
         c = Win11Style.c()
+        ok = c["success"]
         self.setFixedSize(170, 50)
         lay = self.layout()
         if lay is None:
@@ -107,7 +108,7 @@ class _ActiveChip(CardWidget):
         dot = QLabel()
         dot.setFixedSize(8, 8)
         dot.setStyleSheet(
-            "background:#5db872;border-radius:4px;border:none;"
+            f"background:{ok};border-radius:4px;border:none;"
         )
         lay.addWidget(dot)
 
@@ -166,9 +167,10 @@ class _RankRow(QWidget):
         name_lbl.setStyleSheet(f"color:{c['text_primary']};background:transparent;")
         name_lay.addWidget(name_lbl)
         self._active_lbl = CaptionLabel("启用中")
+        ok = c["success"]
         self._active_lbl.setStyleSheet(
-            "color:#5db872;background:transparent;font-size:10px;padding:1px 6px;"
-            "border:1px solid #5db872;border-radius:6px;"
+            f"color:{ok};background:transparent;font-size:10px;padding:1px 6px;"
+            f"border:1px solid {ok};border-radius:6px;"
         )
         name_lay.addWidget(self._active_lbl)
         self._active_lbl.setVisible(bool(self._w.is_active))

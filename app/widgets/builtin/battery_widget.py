@@ -42,12 +42,13 @@ class _BatteryRing(QWidget):
         if self._percent is not None:
             # 电量弧：低电量红色 / 充电黄色 / 正常绿色
             pct = max(0.0, min(100.0, self._percent))
+            tc = Win11Style.c()
             if pct <= 20 and not self._plugged:
-                color = QColor("#e74856")
+                color = QColor(tc["danger"])
             elif self._plugged:
-                color = QColor("#d4a017")
+                color = QColor(tc["warning"])
             else:
-                color = QColor("#5db872")
+                color = QColor(tc["success"])
             arc_pen = QPen(color, 6)
             arc_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(arc_pen)
@@ -74,7 +75,7 @@ class _BatteryRing(QWidget):
             bolt.lineTo(61, 16)
             bolt.closeSubpath()
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#d4a017"))
+            p.setBrush(QColor(Win11Style.c()["warning"]))
             p.drawPath(bolt)
         p.end()
 
