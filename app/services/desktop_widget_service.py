@@ -674,13 +674,20 @@ class DesktopWidgetWindow(QWidget):
         if hwnd:
             _set_click_through(hwnd, enable)
 
-    def _on_close(self):
+    def _teardown_widget(self) -> None:
+        """统一的组件关闭清理（幂等，可安全重复调用）"""
+        if getattr(self, "_widget_closed", False):
+            return
+        self._widget_closed = True
         self.stop_all_timers()
         if self._widget_instance and hasattr(self._widget_instance, "on_close"):
             try:
                 self._widget_instance.on_close()
             except Exception:
-                pass
+                logger.exception("组件 {} on_close 异常", self._info.id)
+
+    def _on_close(self):
+        self._teardown_widget()
         self.close()
         from app.services.desktop_widget_service import DesktopWidgetManager
         mgr = DesktopWidgetManager.instance()
@@ -793,6 +800,8 @@ class DesktopWidgetWindow(QWidget):
 
                 widget = WidgetRegistry.instance().create(config, {}, parent=self._content)
                 if widget:
+                    # 记录实例：统一右键菜单的组件动作、on_close 清理都依赖它
+                    self._widget_instance = widget
                     self._content_layout.addWidget(widget)
                     if hasattr(widget, "refresh"):
                         widget.refresh()
@@ -832,7 +841,9 @@ class DesktopWidgetWindow(QWidget):
         self._timers.clear()
 
     def closeEvent(self, event):
-        self.stop_all_timers()
+        # 隐藏（hide_widget → close）路径也要触发组件 on_close，
+        # 释放组件持有的服务订阅（媒体轮询、统计采样等）
+        self._teardown_widget()
         super().closeEvent(event)
 
 

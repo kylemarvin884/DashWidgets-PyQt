@@ -33,6 +33,22 @@ def _build_menu(widget_id: str, settings: dict | None = None):
     return labels, qss
 
 
+def _build_menu_production(widget_id: str, settings: dict | None = None):
+    """生产路径：不传 widget_instance，由窗口经注册表自行创建组件
+
+    回归：曾因创建的实例未赋回 _widget_instance，统一菜单丢失组件动作。
+    """
+    from app.services.desktop_widget_service import DesktopWidgetWindow
+    from app.models.widget_model import WidgetInfo
+
+    info = WidgetInfo(id=widget_id, name=widget_id, custom_settings=settings or {})
+    win = DesktopWidgetWindow(info)  # 与 show_widget 相同的构造方式
+    menu, _actions = win._build_context_menu()
+    labels = [a.text() for a in menu.actions() if a.text()]
+    win.deleteLater()
+    return labels
+
+
 class TestUnifiedContextMenu:
     def test_image_actions_merged(self):
         labels, _ = _build_menu("image", {})
@@ -76,6 +92,41 @@ class TestUnifiedContextMenu:
         """统一菜单必须包含可用的「关闭小组件」动作（回归：act_close 曾丢失）"""
         labels, _ = _build_menu("clock", {})
         assert "关闭小组件" in labels
+
+    def test_widget_actions_via_production_path(self):
+        """生产路径（窗口自行创建组件实例）下组件动作也要出现在菜单中"""
+        labels = _build_menu_production("image", {})
+        assert "更换图片" in labels, labels
+        assert "组件设置..." in labels and "关闭小组件" in labels
+
+        labels2 = _build_menu_production("image", {"image_path": "x.png"})
+        assert "清除图片" in labels2, labels2
+
+    def test_widget_instance_recorded_and_teardown(self):
+        """窗口必须记录创建的组件实例；关闭时调用其 on_close（幂等）"""
+        from PySide6.QtWidgets import QApplication
+        from app.services.desktop_widget_service import DesktopWidgetWindow
+        from app.models.widget_model import WidgetInfo
+        from app.widgets.base_widget import WidgetConfig, WidgetBase
+
+        # 借用 image 组件记录 on_close 调用次数
+        info = WidgetInfo(id="image", name="图片")
+        win = DesktopWidgetWindow(info)
+        assert win._widget_instance is not None, "生产路径未记录组件实例"
+
+        calls = {"n": 0}
+        orig_on_close = win._widget_instance.on_close
+
+        def _counting_on_close():
+            calls["n"] += 1
+            orig_on_close()
+
+        win._widget_instance.on_close = _counting_on_close
+        win._teardown_widget()
+        win._teardown_widget()  # 幂等
+        assert calls["n"] == 1
+        win.deleteLater()
+        _ = QApplication.instance()
 
     def test_build_menu_returns_close_action_ref(self):
         from app.services.desktop_widget_service import DesktopWidgetWindow
