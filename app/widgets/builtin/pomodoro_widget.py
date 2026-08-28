@@ -260,13 +260,6 @@ class PomodoroWidget(WidgetBase):
         self._phase_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         main_layout.addWidget(self._phase_label)
 
-        # 统计行
-        self._stats_label = QLabel("")
-        self._stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._stats_label.setFont(Win11Style.widget_font(12, QFont.Weight.Light))
-        self._stats_label.setStyleSheet(f"color: {c['text_dim']}; background: transparent;")
-        main_layout.addWidget(self._stats_label)
-
         # 控制按钮行
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
@@ -294,15 +287,19 @@ class PomodoroWidget(WidgetBase):
 
         main_layout.addLayout(btn_row)
 
-        # 设置按钮
-        settings_row = QHBoxLayout()
-        settings_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 底部信息行：统计居中，设置齿轮固定右下角（不再独占一行）
+        self._stats_label = QLabel("")
+        self._stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._stats_label.setFont(Win11Style.widget_font(12, QFont.Weight.Light))
+        self._stats_label.setStyleSheet(f"color: {c['text_dim']}; background: transparent;")
+        bottom_row = QHBoxLayout()
+        bottom_row.addWidget(self._stats_label, 1)
         self._settings_btn = ToolButton(FIF.SETTING)
-        self._settings_btn.setFixedSize(24, 24)
+        self._settings_btn.setFixedSize(22, 22)
         self._settings_btn.setToolTip("时长设置")
         self._settings_btn.clicked.connect(self._open_settings)
-        settings_row.addWidget(self._settings_btn)
-        main_layout.addLayout(settings_row)
+        bottom_row.addWidget(self._settings_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        main_layout.addLayout(bottom_row)
 
         # 计时器
         self._tick = QTimer(self)

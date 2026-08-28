@@ -38,39 +38,32 @@ class _StatBar(QWidget):
         c = Win11Style.widget_colors()
 
         w = self.width()
-        bar_h = 6
-        bar_y = 26
+        h = self.height()
+        m = 14          # 左右统一边距
+        pct_w = 52      # 右侧数值列固定宽
 
-        # 标签
+        # ── 第一行：标签（左）+ 百分比/副文本（右）──
+        row_h = 22
         p.setFont(self._label_font)
         p.setPen(QColor(c["text"]))
-        p.drawText(QRectF(12, 0, 50, 20), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   self._label)
+        p.drawText(QRectF(m, 0, 80, row_h),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self._label)
 
-        # 百分比
-        p.setFont(self._pct_font)
         pct = f"{int(self._value * 100)}%"
-        pct_w = 50
-        p.drawText(QRectF(w - 12 - pct_w, -2, pct_w, 22),
+        p.setFont(self._pct_font)
+        p.drawText(QRectF(w - m - pct_w, 0, pct_w, row_h),
                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, pct)
 
-        # 副文本
-        if self._sub_text:
-            p.setFont(self._sub_font)
-            p.setPen(QColor(c["accent"]))
-            p.drawText(QRectF(w - 12 - pct_w, 20, pct_w, 12),
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self._sub_text)
-
-        # 进度条背景
-        bar_x = 60
-        bar_w = w - bar_x - 72
+        # ── 第二行：进度条（与上下文本对齐，占满行宽）──
+        bar_y = h - 14
+        bar_x = m
+        bar_w = w - m * 2
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(QColor(c["track"])))
-        p.drawRoundedRect(QRectF(bar_x, bar_y, bar_w, bar_h), 3, 3)
+        p.drawRoundedRect(QRectF(bar_x, bar_y, bar_w, 5), 2.5, 2.5)
 
-        # 进度条前景
         if self._value > 0.001:
-            fill_w = int(bar_w * self._value)
+            fill_w = max(5, int(bar_w * self._value))
             grad = QLinearGradient(bar_x, 0, bar_x + fill_w, 0)
             grad.setColorAt(0.0, self._color)
             grad.setColorAt(1.0, QColor(
@@ -79,7 +72,7 @@ class _StatBar(QWidget):
                 min(255, self._color.blue() + 40),
             ))
             p.setBrush(QBrush(grad))
-            p.drawRoundedRect(QRectF(bar_x, bar_y, fill_w, bar_h), 3, 3)
+            p.drawRoundedRect(QRectF(bar_x, bar_y, fill_w, 5), 2.5, 2.5)
 
         p.end()
 

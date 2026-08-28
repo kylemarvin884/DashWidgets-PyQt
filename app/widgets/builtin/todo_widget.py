@@ -32,8 +32,8 @@ class TodoWidget(WidgetBase):
     def _setup_ui(self) -> None:
         c = Win11Style.widget_colors()
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 10, 12, 8)
-        main_layout.setSpacing(2)
+        main_layout.setContentsMargins(16, 12, 16, 12)
+        main_layout.setSpacing(8)
 
         self._title_label = QLabel("待办事项")
         self._title_label.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
@@ -43,8 +43,8 @@ class TodoWidget(WidgetBase):
         self._list_container = QWidget()
         self._list_container.setStyleSheet("background: transparent;")
         self._list_layout = QVBoxLayout(self._list_container)
-        self._list_layout.setContentsMargins(0, 4, 0, 0)
-        self._list_layout.setSpacing(2)
+        self._list_layout.setContentsMargins(0, 2, 0, 2)
+        self._list_layout.setSpacing(6)
 
         scroll = QScrollArea()
         scroll.setWidget(self._list_container)
@@ -63,7 +63,7 @@ class TodoWidget(WidgetBase):
         self._input.setFont(Win11Style.widget_font(13))
         self._input.setStyleSheet(
             f"color: {c['text']}; background: {c['bg_input']};"
-            f" border: 1px solid {c['border_input']}; border-radius: 6px; padding: 4px 8px;"
+            f" border: 1px solid {c['border_input']}; border-radius: 6px; padding: 6px 10px;"
         )
         self._input.returnPressed.connect(self._add_item)
         main_layout.addWidget(self._input)

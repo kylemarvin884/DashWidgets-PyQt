@@ -35,7 +35,10 @@ class CalendarWidget(WidgetBase):
         main_layout.addLayout(title_row)
 
         header_grid = QGridLayout()
-        header_grid.setSpacing(2)
+        header_grid.setSpacing(0)
+        # 7 列均匀拉伸填满卡片宽（不再挤压周末列）
+        for col in range(7):
+            header_grid.setColumnStretch(col, 1)
         hdr_font = Win11Style.widget_font(12, QFont.Weight.Normal)
         for col, wd in enumerate(self.WEEKDAYS_CN):
             lbl = QLabel(wd)
@@ -46,7 +49,9 @@ class CalendarWidget(WidgetBase):
         main_layout.addLayout(header_grid)
 
         self._date_grid = QGridLayout()
-        self._date_grid.setSpacing(3)
+        self._date_grid.setSpacing(0)
+        for col in range(7):
+            self._date_grid.setColumnStretch(col, 1)
         day_font = Win11Style.widget_font(15, QFont.Weight.ExtraLight)
         for row in range(6):
             for col in range(7):

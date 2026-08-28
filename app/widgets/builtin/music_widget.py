@@ -77,12 +77,12 @@ class MusicWidget(WidgetBase):
         )
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(14, 10, 14, 10)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(16, 14, 16, 14)
+        main_layout.setSpacing(12)
 
         # ── 第一行：音乐图标 + 信息 ──
         row_info = QHBoxLayout()
-        row_info.setSpacing(10)
+        row_info.setSpacing(12)
 
         # 音乐图标（替代封面）
         self._icon = MusicIcon(self)
@@ -130,6 +130,7 @@ class MusicWidget(WidgetBase):
         self._btn_next.clicked.connect(self._on_next)
         row_ctrl.addWidget(self._btn_next)
 
+        # 控制行整体居中，剩余空间留在下方（视觉重心在信息+按钮）
         main_layout.addLayout(row_ctrl)
         main_layout.addStretch()
 
