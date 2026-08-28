@@ -76,7 +76,7 @@ class TimerWidget(WidgetBase):
             f"  border: 1px solid {c['border_input']};"
             "  border-radius: 10px;"
             "  padding: 3px 8px;"
-            "  font-size: 11px;"
+            "  font-size: 12px;"
             "}"
             "QPushButton:hover {"
             f"  color: {c['text']};"

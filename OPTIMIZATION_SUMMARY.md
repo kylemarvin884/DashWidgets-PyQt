@@ -3,6 +3,12 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第九轮：云母效果、通知与字体（2026-08-29）
+
+- **云母（Mica）打通**：qfluentwidgets `FluentWindow` 本就默认启用 Mica（窗口背景 alpha=0），但页面级不透明 QSS 挡住了它——小组件管理页整页刷成卡片色、分组页等亦有类似问题。全部改为透明背景，Mica 材质得以透出（浅色下半透明灰、卡片浮层；深色趋近实色 #202020，符合 Win11 行为）。
+- **通知（Toast）对齐 Fluent 通知卡**：圆角 12→8px；背景改半透明层叠色（浅色近白 94%/深色 44,44,44 92%）+ 1px 描边；标题/正文从 10pt/9pt bold 改为 Body Strong 14px / Body 12px（Segoe UI Variable Text）；info/success/warning/error 图标色从 Material 色改为 WinUI SystemFillColor（accent/success/caution/critical）；进出场动画 280→150ms 统一 OutCubic。
+- **字体收敛**：字体辅助函数提升为 `Win11Style.display_font()/subtitle_font()` 全局共享；分组页标题 24px bold + Tailwind 灰硬编码 → Display 28 + 主题 token；残留 9pt/10pt/11px 微型字号统一为 12px Caption；源码中不再有 Georgia/衬线残留。
+
 ## 第八轮：主页排版对齐 Fluent 2 + 动效（2026-08-29）
 
 - **主页字阶对齐 Fluent Type Ramp**：页面标题 36px 衬线 → Display 28px Regular（Segoe UI Variable Display）；分区标题（已启用的组件/使用排行）22px 衬线 → Subtitle 20px Semibold；表头/徽章统一 Caption 12px。

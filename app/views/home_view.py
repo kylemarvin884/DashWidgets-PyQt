@@ -27,26 +27,9 @@ from app.models.widget_model import WidgetModel
 from app.services.usage_tracker import UsageStatsService
 from app.services.desktop_widget_service import Win11Style
 
-
-# ── Fluent 动效辅助 ─────────────────────────────────────────────── #
-
-def _fluent_display_font(size: int) -> QFont:
-    """Fluent Display 字体（Segoe UI Variable Display，Regular）"""
-    f = QFont("Segoe UI Variable Display")
-    if not f.exactMatch():
-        f = QFont("Segoe UI Variable")
-    f.setPointSize(size)
-    f.setWeight(QFont.Weight.Normal)
-    f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 98)
-    return f
-
-
-def _fluent_subtitle_font(size: int = 20) -> QFont:
-    """Fluent Subtitle（20px Semibold）"""
-    f = QFont(Win11Style.FONT_SANS)
-    f.setPointSize(size)
-    f.setWeight(QFont.Weight.DemiBold)
-    return f
+# Fluent 字阶辅助（Win11Style 上的全局实现）
+_fluent_display_font = Win11Style.display_font
+_fluent_subtitle_font = Win11Style.subtitle_font
 
 
 def _fade_slide_in(widget: QWidget, delay_ms: int = 0, duration_ms: int = 150) -> None:

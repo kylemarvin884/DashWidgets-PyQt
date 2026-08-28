@@ -332,7 +332,7 @@ class PluginCard(CardWidget):
                         color: {PluginViewColors.get_accent()};
                         border: none;
                         padding: 2px 8px;
-                        font-size: 11px;
+                        font-size: 12px;
                     }}
                 """)
                 meta_layout.addWidget(tag_btn)
@@ -343,7 +343,7 @@ class PluginCard(CardWidget):
         if self.entry.meta.requires:
             deps_text = "依赖: " + ", ".join(self.entry.meta.requires)
             deps_label = CaptionLabel(deps_text)
-            deps_label.setStyleSheet(f"color: {PluginViewColors.get_text_tertiary()}; font-size: 11px;")
+            deps_label.setStyleSheet(f"color: {PluginViewColors.get_text_tertiary()}; font-size: 12px;")
             info_layout.addWidget(deps_label)
 
         # 权限信息
@@ -352,7 +352,7 @@ class PluginCard(CardWidget):
             perm_layout = QHBoxLayout()
             perm_layout.setSpacing(6)
             perm_label = CaptionLabel("权限:")
-            perm_label.setStyleSheet(f"color: {PluginViewColors.get_text_tertiary()}; font-size: 11px;")
+            perm_label.setStyleSheet(f"color: {PluginViewColors.get_text_tertiary()}; font-size: 12px;")
             perm_layout.addWidget(perm_label)
             
             for perm in permissions:
@@ -368,7 +368,7 @@ class PluginCard(CardWidget):
                         color: #10B981;
                         border: none;
                         padding: 2px 8px;
-                        font-size: 11px;
+                        font-size: 12px;
                     }}
                 """)
                 perm_layout.addWidget(perm_btn)

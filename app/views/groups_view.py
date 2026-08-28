@@ -35,13 +35,16 @@ class GroupsView(ScrollArea):
         layout.setSpacing(16)
 
         # 标题
+        from app.services.desktop_widget_service import Win11Style
+        c = Win11Style.c()
         title = QLabel("分组管理")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #1F2937;")
+        title.setFont(Win11Style.display_font(28))
+        title.setStyleSheet(f"color: {c['text_primary']}; background: transparent;")
         layout.addWidget(title)
 
         # 说明
         desc = CaptionLabel("创建和管理小组件分组，控制不同场景下显示的小组件")
-        desc.setStyleSheet("color: #6B7280;")
+        desc.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         layout.addWidget(desc)
 
         layout.addSpacing(10)
@@ -124,17 +127,17 @@ class GroupsView(ScrollArea):
 
         # 删除分组按钮
         delete_btn = PushButton("删除分组")
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                background: #EF4444;
+        delete_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {c['danger']};
                 color: white;
                 border: none;
                 padding: 6px 12px;
                 border-radius: 4px;
-            }
-            QPushButton:hover {
-                background: #DC2626;
-            }
+            }}
+            QPushButton:hover {{
+                background: {c['accent_hover']};
+            }}
         """)
         delete_btn.clicked.connect(lambda: self._delete_group(group_name))
         name_layout.addWidget(delete_btn)

@@ -265,6 +265,25 @@ class Win11Style:
         }
 
     @classmethod
+    def display_font(cls, size: int, semibold: bool = False) -> QFont:
+        """Fluent Display 字体（Segoe UI Variable Display，28px 用于页面标题）"""
+        f = QFont("Segoe UI Variable Display")
+        if not f.exactMatch():
+            f = QFont("Segoe UI Variable")
+        f.setPointSize(size)
+        f.setWeight(QFont.Weight.DemiBold if semibold else QFont.Weight.Normal)
+        f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 98)
+        return f
+
+    @classmethod
+    def subtitle_font(cls, size: int = 20) -> QFont:
+        """Fluent Subtitle（20px Semibold，分区标题）"""
+        f = QFont(cls.FONT_SANS)
+        f.setPointSize(size)
+        f.setWeight(QFont.Weight.DemiBold)
+        return f
+
+    @classmethod
     def menu_qss(cls) -> str:
         """WinUI MenuFlyout 规格的菜单样式（托盘菜单/右键菜单共用）
 

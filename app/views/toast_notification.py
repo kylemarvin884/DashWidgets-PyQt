@@ -30,8 +30,8 @@ TOAST_WIDTH  = 340        # 固定宽度（px）
 TOAST_MIN_H  = 64         # 最小高度
 TOAST_MARGIN = 16         # 距屏幕边缘距离
 TOAST_GAP    = 10         # 相邻 Toast 之间间距
-TOAST_ANIM_MS = 280       # 动画时长（ms）
-TOAST_RADIUS = 12         # 圆角半径
+TOAST_ANIM_MS = 150       # 动画时长（Fluent 快速动效）
+TOAST_RADIUS = 8          # 圆角半径（WinUI 通知卡标准）
 
 # 位置常量
 POS_TOP_LEFT      = "top_left"
@@ -89,16 +89,18 @@ class ToastItem(QWidget):
         self.setFixedWidth(TOAST_WIDTH)
         h = QHBoxLayout(self)
         h.setContentsMargins(14, 12, 10, 12)
-        h.setSpacing(10)
+        h.setSpacing(12)
 
-        # 图标
+        # 图标（语义色对齐 WinUI SystemFillColor）
+        from app.services.desktop_widget_service import Win11Style
+        tc = Win11Style.c()
         icon_map = {
-            "info": (FIF.INFO, "#60CDFF"),
-            "success": (FIF.COMPLETED, "#4CAF50"),
-            "warning": (FIF.IOT, "#FFB74D"),
-            "error": (FIF.CLOSE, "#F44336"),
+            "info": (FIF.INFO, tc["accent"]),
+            "success": (FIF.COMPLETED, tc["success"]),
+            "warning": (FIF.IOT, tc["warning"]),
+            "error": (FIF.CLOSE, tc["danger"]),
         }
-        fif, tint = icon_map.get(self._level, (FIF.INFO, "#60CDFF"))
+        fif, tint = icon_map.get(self._level, (FIF.INFO, tc["accent"]))
         icon_widget = IconWidget(fif)
         icon_widget.setFixedSize(24, 24)
         self._icon_widget = icon_widget
@@ -144,7 +146,7 @@ class ToastItem(QWidget):
             self._timer = None
 
     def paintEvent(self, event) -> None:
-        """绘制圆角背景（替代 QGraphicsDropShadowEffect，彻底消除半透明边框伪影）"""
+        """绘制圆角背景（Fluent 通知卡：Acrylic 半透明底 + 1px 卡片描边）"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -154,13 +156,13 @@ class ToastItem(QWidget):
         path = QPainterPath()
         path.addRoundedRect(QRectF(0, 0, w, h), r, r)
 
-        # 背景
+        # 背景 — 半透明层叠色（近 Acrylic 材质，透出云母/桌面）
         if self._is_dark:
-            bg_color = QColor(40, 40, 40, 240)
-            border_color = QColor(80, 80, 80, 80)
+            bg_color = QColor(44, 44, 44, 235)     # LayerFillColorDefault 近似
+            border_color = QColor(255, 255, 255, 18)
         else:
-            bg_color = QColor(255, 255, 255, 245)
-            border_color = QColor(0, 0, 0, 12)
+            bg_color = QColor(252, 252, 252, 240)  # 近白半透明
+            border_color = QColor(0, 0, 0, 18)
 
         painter.fillPath(path, QBrush(bg_color))
 
@@ -175,33 +177,32 @@ class ToastItem(QWidget):
         self._update_theme()
 
     def _update_theme(self) -> None:
+        """文字样式 — Fluent Type Ramp：Body Strong 标题 / Body 正文"""
         self._is_dark = isDarkTheme()
 
         if self._is_dark:
-            title_color = "#E5E5E5"
-            msg_color = "#A0A0A0"
-            close_btn_color = "#808080"
-            close_btn_hover = "#505050"
+            title_color = "#ffffff"
+            msg_color = "rgba(255,255,255,0.78)"
+            close_btn_color = "rgba(255,255,255,0.55)"
+            close_btn_hover = "rgba(255,255,255,0.06)"
         else:
-            title_color = "#1a1a1a"
-            msg_color = "#555555"
-            close_btn_color = "#999999"
-            close_btn_hover = "#e0e0e0"
-
-        # 图标跟随主题
-        if hasattr(self, '_icon_widget'):
-            if self._is_dark:
-                self._icon_widget.setStyleSheet("background: transparent;")
-            else:
-                self._icon_widget.setStyleSheet("background: transparent;")
+            title_color = "rgba(0,0,0,0.90)"
+            msg_color = "rgba(0,0,0,0.62)"
+            close_btn_color = "rgba(0,0,0,0.45)"
+            close_btn_hover = "rgba(0,0,0,0.05)"
 
         self._title_lbl.setStyleSheet(
-            f"color: {title_color}; font-size: 10pt; font-weight: bold;"
+            f"color: {title_color}; font-size: 14px; font-weight: 600;"
+            f'font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI";'
+            "background: transparent;"
         )
-        self._msg_lbl.setStyleSheet(f"color: {msg_color}; font-size: 9pt;")
+        self._msg_lbl.setStyleSheet(
+            f"color: {msg_color}; font-size: 12px; background: transparent;"
+            f'font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI";'
+        )
         self._close_btn.setStyleSheet(
             "QPushButton { border: none; background: transparent; "
-            f"color: {close_btn_color}; font-size: 13px; font-weight: bold; border-radius: 11px; }}"
+            f"color: {close_btn_color}; font-size: 12px; border-radius: 11px; }}"
             f"QPushButton:hover {{ background: {close_btn_hover}; color: {title_color}; }}"
         )
         self.update()
@@ -267,7 +268,7 @@ class ToastManager(QObject):
         end_pos = self._off_screen_pos(toast)
         anim = QPropertyAnimation(toast, b"pos", self)
         anim.setDuration(TOAST_ANIM_MS)
-        anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.setEndValue(end_pos)
         anim.finished.connect(toast.close)
         anim.finished.connect(anim.deleteLater)

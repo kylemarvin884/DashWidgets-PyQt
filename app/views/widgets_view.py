@@ -92,10 +92,8 @@ class WidgetsView(QFrame):
         c = Win11Style.c()
         self._header.setStyleSheet("QFrame { background: transparent; }")
         self._batch_bar.setStyleSheet("QFrame { background: transparent; }")
-        self._scroll_area.setStyleSheet(
-            f"ScrollArea {{ background: {c['card_bg']}; border: none; }}"
-        )
-        self._scroll_content.setStyleSheet(f"QWidget {{ background: {c['card_bg']}; }}")
+        self._scroll_area.setStyleSheet("ScrollArea { background: transparent; border: none; }")
+        self._scroll_content.setStyleSheet("QWidget { background: transparent; }")
         for card in self._widget_cards.values():
             card.update_theme()
 
@@ -173,16 +171,14 @@ class WidgetsView(QFrame):
         # 滚动区域
         self._scroll_area = ScrollArea(self)
         c = Win11Style.c()
-        self._scroll_area.setStyleSheet(
-            f"ScrollArea {{ background: {c['card_bg']}; border: none; }}"
-        )
+        self._scroll_area.setStyleSheet("ScrollArea { background: transparent; border: none; }")
         self._scroll_area.setWidgetResizable(True)
         self._scroll_area.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
 
         self._scroll_content = QWidget()
-        self._scroll_content.setStyleSheet(f"QWidget {{ background: {c['card_bg']}; }}")
+        self._scroll_content.setStyleSheet("QWidget { background: transparent; }")
         self._grid_layout = QGridLayout(self._scroll_content)
         self._grid_layout.setContentsMargins(36, 16, 36, 36)
         self._grid_layout.setSpacing(16)
