@@ -555,7 +555,11 @@ class HomeView(QFrame):
     def _remove_board_placeholder(self):
         for i in range(self._board_lay.count()):
             item = self._board_lay.itemAt(i)
-            if item.widget() and item.widget().objectName() == "boardPlaceholder":
-                item.widget().setParent(None)
-                item.widget().deleteLater()
+            w = item.widget() if item else None
+            if w is not None and w.objectName() == "boardPlaceholder":
+                # 先取引用再移除：setParent(None) 会令 QLayoutItem 失效，
+                # 之后 item.widget() 返回 None
+                self._board_lay.removeWidget(w)
+                w.setParent(None)
+                w.deleteLater()
                 break

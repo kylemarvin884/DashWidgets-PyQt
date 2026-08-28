@@ -71,3 +71,46 @@ class TestUnifiedContextMenu:
         for cls in (ImageWidget, DocumentViewerWidget):
             assert "contextMenuEvent" not in cls.__dict__, cls.__name__
             assert "get_context_menu_actions" in cls.__dict__, cls.__name__
+
+    def test_close_action_included(self):
+        """统一菜单必须包含可用的「关闭小组件」动作（回归：act_close 曾丢失）"""
+        labels, _ = _build_menu("clock", {})
+        assert "关闭小组件" in labels
+
+    def test_build_menu_returns_close_action_ref(self):
+        from app.services.desktop_widget_service import DesktopWidgetWindow
+        from app.models.widget_model import WidgetInfo
+
+        win = DesktopWidgetWindow(WidgetInfo(id="clock", name="时钟"))
+        _menu, actions = win._build_context_menu()
+        assert actions["close"] is not None
+        assert actions["close"].text() == "关闭小组件"
+        win.deleteLater()
+
+
+class TestHomeViewPlaceholder:
+    """主页排行占位符的重复刷新回归（曾因 QLayoutItem 失效崩溃）"""
+
+    @pytest.fixture(scope="class", autouse=True)
+    def _qapp(self):
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance() or QApplication([])
+        yield app
+
+    def test_placeholder_refresh_twice(self):
+        """占位符已存在时再次刷新不应崩溃"""
+        from app.views.home_view import HomeView
+
+        view = HomeView()
+        # 无使用数据时 _refresh_leaderboard 走占位符路径
+        view._show_board_placeholder()
+        view._show_board_placeholder()  # 第二次：移除旧占位符再新建
+        view._refresh_leaderboard()
+        placeholders = [
+            view._board_lay.itemAt(i).widget()
+            for i in range(view._board_lay.count())
+            if view._board_lay.itemAt(i).widget()
+            and view._board_lay.itemAt(i).widget().objectName() == "boardPlaceholder"
+        ]
+        assert len(placeholders) == 1, "占位符应恰好一个"
+        view.deleteLater()

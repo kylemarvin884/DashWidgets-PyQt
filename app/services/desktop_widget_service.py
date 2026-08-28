@@ -622,7 +622,7 @@ class DesktopWidgetWindow(QWidget):
         act_click.setChecked(self._click_through)
 
         menu.addSeparator()
-        menu.addAction("关闭小组件")
+        act_close = menu.addAction("关闭小组件")
 
         actions = {
             "settings": act_settings,
@@ -630,6 +630,7 @@ class DesktopWidgetWindow(QWidget):
             "normal": act_normal,
             "bottom": act_bottom,
             "click_through": act_click,
+            "close": act_close,
         }
         return menu, actions
 
@@ -637,21 +638,17 @@ class DesktopWidgetWindow(QWidget):
         menu, actions = self._build_context_menu()
         selected = menu.exec(event.globalPos())
 
-        act_settings = actions["settings"]
-        act_top, act_normal = actions["top"], actions["normal"]
-        act_bottom, act_click = actions["bottom"], actions["click_through"]
-
-        if selected == act_settings:
+        if selected == actions["settings"]:
             self._open_appearance_dialog()
-        elif selected == act_top:
+        elif selected == actions["top"]:
             self.set_window_level("top")
-        elif selected == act_normal:
+        elif selected == actions["normal"]:
             self.set_window_level("normal")
-        elif selected == act_bottom:
+        elif selected == actions["bottom"]:
             self.set_window_level("bottom")
-        elif selected == act_click:
+        elif selected == actions["click_through"]:
             self.set_click_through(not self._click_through)
-        elif selected == act_close:
+        elif selected == actions["close"]:
             self._on_close()
 
     # ------------------------------------------------------------------ #
