@@ -101,6 +101,26 @@ class _SettingsPage(ScrollArea):
         self.add_widget(lbl)
 
 
+class _TightComboBox(ComboBox):
+    """弹出菜单收紧阴影/边距的 ComboBox。
+
+    默认 RoundMenu 带 30px 模糊半径的投影，弹出层的实际渲染尺寸
+    比圆角卡片大一圈，边缘半透明像素在深浅背景交界处会显出一条
+    模糊的"透明框"。这里用小半径清晰阴影 + 对称边距替代。
+
+    注意：调整必须在 _createComboMenu 返回前完成（不能在子类
+    __init__ 里 setShadowEffect——会导致 view 的 GC 状态异常，
+    随后 exec 解析失败，见 OPTIMIZATION_SUMMARY）。
+    """
+
+    def _createComboMenu(self):
+        from qfluentwidgets.components.widgets.combo_box import ComboBoxMenu
+        menu = ComboBoxMenu(self)
+        menu.setShadowEffect(blurRadius=12, offset=(0, 2), color=QColor(0, 0, 0, 60))
+        menu.view.setViewportMargins(1, 2, 1, 4)
+        return menu
+
+
 class _CurrencyPairSettingCard(SettingCard):
     """货币对选择卡片（一行显示哪两种货币的汇率）"""
 
@@ -110,9 +130,9 @@ class _CurrencyPairSettingCard(SettingCard):
         self._callback = callback
         self._currencies = currencies
 
-        self._base_combo = ComboBox(self)
+        self._base_combo = _TightComboBox(self)
         self._base_combo.addItems(currencies)
-        self._quote_combo = ComboBox(self)
+        self._quote_combo = _TightComboBox(self)
         self._quote_combo.addItems(currencies)
         for combo in (self._base_combo, self._quote_combo):
             combo.setMinimumWidth(86)

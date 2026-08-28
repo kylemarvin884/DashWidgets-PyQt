@@ -11,14 +11,16 @@ from app.utils.async_fetch import run_in_background
 
 _DEFAULT_PAIRS = [
     ("USD", "CNY"), ("EUR", "CNY"), ("GBP", "CNY"), ("JPY", "CNY"), ("HKD", "CNY"),
+    ("AUD", "CNY"),
 ]
+_MAX_PAIRS = 6  # 行数上限
 _REFRESH_MS = 60 * 60 * 1000  # 参考汇率每小时刷新一次
 
 
 def _configured_pairs(settings: dict) -> list[tuple[str, str]]:
     """从设置读取每行的货币对（pair_1..pair_5），缺省回落到默认值"""
     pairs: list[tuple[str, str]] = []
-    for i in range(1, 6):
+    for i in range(1, _MAX_PAIRS + 1):
         val = settings.get(f"pair_{i}")
         if isinstance(val, (list, tuple)) and len(val) == 2:
             base, quote = str(val[0]).upper(), str(val[1]).upper()
@@ -27,6 +29,12 @@ def _configured_pairs(settings: dict) -> list[tuple[str, str]]:
                 continue
         pairs.append(_DEFAULT_PAIRS[i - 1])
     return pairs
+
+
+def _configured_count(settings: dict) -> int:
+    """用户实际配置的行数（settings 中存在的 pair_N 键数）"""
+    return sum(1 for i in range(1, _MAX_PAIRS + 1)
+               if isinstance(settings.get(f"pair_{i}"), (list, tuple)))
 
 
 class ExchangeWidget(WidgetBase):
@@ -81,6 +89,71 @@ class ExchangeWidget(WidgetBase):
             self._rate_labels[pair] = rate_lbl
             self._pair_rows[pair] = row_w
             main_layout.addWidget(row_w)
+
+        # ── 底部操作行：添加/删除（已配置行数上限 _MAX_PAIRS）──
+        count = _configured_count(self.config.settings)
+        op_row = QHBoxLayout()
+        op_row.setSpacing(12)
+
+        from qfluentwidgets import ToolButton, FluentIcon as FIF
+        self._add_btn = ToolButton(FIF.ADD)
+        self._add_btn.setFixedSize(26, 26)
+        self._add_btn.setToolTip(f"添加货币对（最多 {_MAX_PAIRS} 行）")
+        self._add_btn.setEnabled(count < _MAX_PAIRS)
+        self._add_btn.clicked.connect(self._add_pair)
+        op_row.addWidget(self._add_btn)
+
+        self._remove_btn = ToolButton(FIF.REMOVE)
+        self._remove_btn.setFixedSize(26, 26)
+        self._remove_btn.setToolTip("删除最后一行")
+        self._remove_btn.setEnabled(count > 1)
+        self._remove_btn.clicked.connect(self._remove_last_pair)
+        op_row.addWidget(self._remove_btn)
+
+        op_row.addStretch()
+        main_layout.addLayout(op_row)
+
+    def _add_pair(self) -> None:
+        """追加一行（默认 USD/CNY；超过上限忽略）"""
+        settings = dict(self.config.settings)
+        count = _configured_count(settings)
+        if count >= _MAX_PAIRS:
+            return
+        next_idx = count + 1
+        settings[f"pair_{next_idx}"] = ["USD", "CNY"]
+        self._save_and_apply(settings)
+
+    def _remove_last_pair(self) -> None:
+        """删除最后一行（至少保留 1 行）"""
+        settings = dict(self.config.settings)
+        count = _configured_count(settings)
+        if count <= 1:
+            return
+        # 删除后：把被删槽位之后的配置前移，保持行连续
+        for i in range(count, _MAX_PAIRS):
+            nxt = settings.get(f"pair_{i + 1}")
+            if nxt is not None:
+                settings[f"pair_{i}"] = nxt
+            else:
+                settings.pop(f"pair_{i}", None)
+        settings.pop(f"pair_{count}", None)
+        settings.pop(f"pair_{count}", None)
+        self._save_and_apply(settings)
+
+    def _save_and_apply(self, settings: dict) -> None:
+        """持久化配置并重建行"""
+        self.config.settings = settings
+        try:
+            from app.models.widget_model import WidgetModel
+            model = WidgetModel()
+            w = model.get_widget(self.config.id)
+            if w:
+                w.custom_settings = dict(settings)
+                model.save()
+        except Exception:
+            pass
+        self._build_rows()
+        self._refresh()
 
     def _refresh(self):
         """在后台线程获取汇率（网络请求阻塞，不能放 UI 线程）"""

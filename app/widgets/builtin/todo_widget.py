@@ -26,6 +26,7 @@ class TodoWidget(WidgetBase):
     def __init__(self, config: WidgetConfig, services: dict, parent=None):
         super().__init__(config, services, parent)
         self._items = []
+        self._show_done_count = bool(config.settings.get("show_done_count", True))
         self._setup_ui()
         self._load_items()
 
@@ -35,10 +36,19 @@ class TodoWidget(WidgetBase):
         main_layout.setContentsMargins(16, 12, 16, 12)
         main_layout.setSpacing(8)
 
+        title_row = QHBoxLayout()
         self._title_label = QLabel("待办事项")
         self._title_label.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
         self._title_label.setStyleSheet(f"color: {c['title']}; background: transparent;")
-        main_layout.addWidget(self._title_label)
+        title_row.addWidget(self._title_label)
+        title_row.addStretch()
+
+        self._done_label = QLabel("")
+        self._done_label.setFont(Win11Style.widget_font(12))
+        self._done_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
+        title_row.addWidget(self._done_label)
+
+        main_layout.addLayout(title_row)
 
         self._list_container = QWidget()
         self._list_container.setStyleSheet("background: transparent;")
@@ -83,6 +93,23 @@ class TodoWidget(WidgetBase):
             TODO_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
+        self._update_done_count()
+
+    def _update_done_count(self) -> None:
+        """更新「x/y 已完成」计数（可在设置中关闭）"""
+        if not hasattr(self, "_done_label"):
+            return
+        total = len(self._items)
+        if not self._show_done_count or total == 0:
+            self._done_label.setText("")
+            return
+        done = sum(1 for cb, _ in self._items if cb.isChecked())
+        self._done_label.setText(f"{done}/{total} 已完成")
+
+    def on_settings_changed(self, settings: dict) -> None:
+        if "show_done_count" in settings:
+            self._show_done_count = bool(settings["show_done_count"])
+            self._update_done_count()
 
     def _load_items(self) -> None:
         try:
@@ -93,6 +120,7 @@ class TodoWidget(WidgetBase):
                         self._add_todo_row(item["text"], item.get("checked", False))
         except Exception:
             pass
+        self._update_done_count()
 
     # ── 行操作 ────────────────────────────────────────────── #
 

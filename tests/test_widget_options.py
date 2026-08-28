@@ -159,7 +159,7 @@ class TestSettingsDialogOptions:
 
     def test_dialog_no_options_widget(self, _isolated_model):
         from app.widgets.widget_settings_dialog import WidgetSettingsWindow as WidgetSettingsDialog
-        dlg = WidgetSettingsDialog("todo")
+        dlg = WidgetSettingsDialog("note")
         assert not dlg._option_controls
 
     def test_dialog_range_and_reset(self, _isolated_model):

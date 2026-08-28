@@ -113,6 +113,8 @@ class WeatherWidget(WidgetBase):
         self._fetching = False
         self._task = None  # 持有后台任务信号对象，防止被 GC
         self._show_detail = bool(config.settings.get("show_detail", True))
+        self._unit = config.settings.get("unit", "°C") or "°C"
+        self._last_data = None
         self._setup_ui()
         self._apply_detail_visibility()
         self._refresh_timer = QTimer(self)
@@ -120,6 +122,14 @@ class WeatherWidget(WidgetBase):
         self._refresh_timer.timeout.connect(self._fetch_weather)
         self._fetch_weather()
         self._refresh_timer.start()
+
+    def _format_temp(self, celsius: float) -> str:
+        """按配置的温度单位格式化"""
+        if self._unit == "°F":
+            return f"{celsius * 9 / 5 + 32:.0f}°F"
+        if self._unit == "K":
+            return f"{celsius + 273.15:.0f}K"
+        return f"{celsius:.0f}℃"
 
     def _setup_ui(self) -> None:
         c = Win11Style.widget_colors()
@@ -175,21 +185,29 @@ class WeatherWidget(WidgetBase):
         """工作线程结果回传（UI 线程执行）"""
         self._fetching = False
         if data:
-            wtype = _ICON_MAP.get(data.icon, "sunny")
-            self._icon.set_weather(wtype)
-            self._desc_label.setText(data.condition)
-            self._temp_label.setText(f"{data.temperature:.0f}℃")
-            self._detail_label.setText(
-                f"湿度 {data.humidity}% · 风 {data.wind_speed:.0f} km/h"
-            )
+            self._last_data = data
+            self._render(data)
         else:
             self._desc_label.setText("获取失败")
-            self._temp_label.setText("--℃")
+            self._temp_label.setText("--")
+
+    def _render(self, data) -> None:
+        wtype = _ICON_MAP.get(data.icon, "sunny")
+        self._icon.set_weather(wtype)
+        self._desc_label.setText(data.condition)
+        self._temp_label.setText(self._format_temp(float(data.temperature)))
+        self._detail_label.setText(
+            f"湿度 {data.humidity}% · 风 {data.wind_speed:.0f} km/h"
+        )
 
     def on_settings_changed(self, settings: dict) -> None:
         if "show_detail" in settings:
             self._show_detail = bool(settings["show_detail"])
             self._apply_detail_visibility()
+        if "unit" in settings:
+            self._unit = settings["unit"] or "°C"
+            if self._last_data is not None:
+                self._render(self._last_data)  # 单位切换即时重渲染，无需重新联网
 
     def apply_settings(self, settings: dict) -> None:
         if "weather" in settings:

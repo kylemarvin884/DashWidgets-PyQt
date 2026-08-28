@@ -32,6 +32,7 @@ _WIDGET_OPTIONS: dict[str, list[dict[str, Any]]] = {
     "clock": [
         {"key": "show_date", "label": "显示日期行", "type": "bool", "default": True},
         # show_seconds 已在外观区块提供，这里不重复声明
+        {"key": "hour_12", "label": "12 小时制", "type": "bool", "default": False},
     ],
     "system_monitor": [
         {"key": "show_cpu", "label": "显示 CPU", "type": "bool", "default": True},
@@ -44,12 +45,17 @@ _WIDGET_OPTIONS: dict[str, list[dict[str, Any]]] = {
     ],
     "weather": [
         {"key": "show_detail", "label": "显示湿度/风速", "type": "bool", "default": True},
+        {"key": "unit", "label": "温度单位", "type": "choice",
+         "default": "°C", "choices": [("°C", "摄氏度 °C"), ("°F", "华氏度 °F"), ("K", "开尔文 K")]},
     ],
     "music": [
         {"key": "show_artist", "label": "显示歌手", "type": "bool", "default": True},
     ],
     "battery": [
         {"key": "show_time", "label": "显示剩余时间", "type": "bool", "default": True},
+    ],
+    "todo": [
+        {"key": "show_done_count", "label": "显示完成计数", "type": "bool", "default": True},
     ],
     "rss": [
         {"key": "max_items", "label": "显示条数", "type": "int",
@@ -71,6 +77,9 @@ _WIDGET_OPTIONS: dict[str, list[dict[str, Any]]] = {
          "currencies": ["USD", "EUR", "GBP", "JPY", "HKD", "CNY", "KRW", "AUD", "CAD", "CHF"]},
         {"key": "pair_5", "label": "第 5 行", "type": "currency_pair",
          "default": ["HKD", "CNY"],
+         "currencies": ["USD", "EUR", "GBP", "JPY", "HKD", "CNY", "KRW", "AUD", "CAD", "CHF"]},
+        {"key": "pair_6", "label": "第 6 行", "type": "currency_pair",
+         "default": ["AUD", "CNY"],
          "currencies": ["USD", "EUR", "GBP", "JPY", "HKD", "CNY", "KRW", "AUD", "CAD", "CHF"]},
     ],
 }
