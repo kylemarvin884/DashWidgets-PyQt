@@ -3,6 +3,13 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第七轮：Fluent 2 菜单与组件样式对齐（2026-08-29）
+
+- **统一 WinUI MenuFlyout 规格菜单**（`Win11Style.menu_qss()`，托盘菜单与桌面组件右键菜单共用）：8px 外圆角、1px 卡片描边、条目 14px Segoe UI Variable Text + 4px 选中圆角、subtle 悬停叠层、1px 分隔线、图标左缘 8px 内边距。
+- **托盘菜单**：从无样式原生 QMenu 换为 Fluent 规格，并按信息架构重排（显示窗口/设置 → 小组件操作 → 主题 → 退出）；托盘菜单长驻，主题切换时自动重刷样式。
+- **组件右键菜单**：内联 QSS 收敛到共享 `menu_qss()`（每次右键重建，自动跟随主题）。
+- **组件标题统一为 Fluent Caption Semibold**（12px 次要色）：系统监控/RSS/文档查看器的手写标题样式收敛到 `Win11Style.widget_title()`；设置页分区标题从衬线 18px 改为 Fluent Body Strong（14px Semibold，`label_title`）。
+
 ## 第六轮：回归 Fluent 原生设计语言（2026-08-29）
 
 - **主窗口**：删除约 260 行覆盖 qfluentwidgets 的自定义 QSS（奶油画布/珊瑚红/衬线标题/自定义导航与按钮），视觉完全交还原生 Fluent 主题，浅色/深色随系统自动切换。

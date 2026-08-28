@@ -104,16 +104,12 @@ class SystemMonitorWidget(WidgetBase):
         self._connect_stats_service()
 
     def _setup_ui(self) -> None:
-        c = Win11Style.widget_colors()
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(14, 8, 14, 8)
         main_layout.setSpacing(2)
 
-        # 标题
-        title = QLabel("系统监控")
-        title.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Medium))
-        title.setStyleSheet(f"color: {c['text']}; background: transparent; padding-bottom: 2px;")
-        main_layout.addWidget(title)
+        # 标题（Fluent Caption Semibold）
+        main_layout.addWidget(Win11Style.widget_title("系统监控"))
 
         # CPU
         self._cpu_bar = _StatBar("CPU", self.CPU_COLOR, self)

@@ -64,14 +64,11 @@ class RssWidget(WidgetBase):
         self._refresh_timer.start()
 
     def _setup_ui(self):
-        c = Win11Style.widget_colors()
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(14, 12, 14, 12)
         main_layout.setSpacing(4)
 
-        self._title = QLabel("RSS 订阅")
-        self._title.setFont(QFont("Segoe UI Variable", 11, QFont.Weight.Light))
-        self._title.setStyleSheet(f"color: {c['title']}; background: transparent;")
+        self._title = Win11Style.widget_title("RSS 订阅")
         main_layout.addWidget(self._title)
 
         self._list_container = QWidget(self)

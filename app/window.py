@@ -398,10 +398,19 @@ class MainWindow(FluentWindow):
         self._tray.setIcon(QIcon(str(ICON_PATH)) if ICON_PATH else QIcon())
 
         from PySide6.QtWidgets import QMenu as StdMenu
+        from app.services.desktop_widget_service import Win11Style
 
         menu = StdMenu()
+        # WinUI MenuFlyout 规格；托盘菜单长驻，主题切换时重刷样式
+        menu.setStyleSheet(Win11Style.menu_qss())
 
-        # 小组件操作
+        # ── 主窗口 ──
+        menu.addAction("显示窗口", self._restore_window).setIcon(FIF.HOME.icon())
+        menu.addAction("打开设置", self._open_settings).setIcon(FIF.SETTING.icon())
+
+        menu.addSeparator()
+
+        # ── 小组件 ──
         self._toggle_widgets_action = menu.addAction(
             "隐藏所有小组件", self.toggle_all_widgets
         )
@@ -411,7 +420,7 @@ class MainWindow(FluentWindow):
             FIF.CANCEL.icon()
         )
 
-        # 主题子菜单
+        # ── 主题子菜单 ──
         theme_menu = menu.addMenu("切换主题")
         self._theme_light_action = theme_menu.addAction(
             "浅色模式", lambda: self._set_theme(Theme.LIGHT)
@@ -426,21 +435,23 @@ class MainWindow(FluentWindow):
         )
         self._theme_auto_action.setCheckable(True)
 
-        # 设置与退出
         menu.addSeparator()
-        menu.addAction("打开设置", self._open_settings).setIcon(FIF.SETTING.icon())
-        menu.addSeparator()
-        menu.addAction("显示窗口", self._restore_window).setIcon(FIF.LINK.icon())
-        menu.addAction("退出", self._quit).setIcon(FIF.EMBED.icon())
+
+        # ── 退出 ──
+        menu.addAction("退出", self._quit).setIcon(FIF.POWER_BUTTON.icon())
 
         self._tray.setContextMenu(menu)
+        self._tray_menu = menu
 
         _ = self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
 
-        # 更新主题菜单状态
+        # 更新主题菜单状态 + 菜单样式随主题重刷
         self._update_theme_menu_state()
         qconfig.themeChanged.connect(self._update_theme_menu_state)
+        qconfig.themeChanged.connect(
+            lambda *_: self._tray_menu.setStyleSheet(Win11Style.menu_qss())
+        )
 
     # ------------------------------------------------------------------
     # URL 导航

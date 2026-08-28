@@ -262,14 +262,68 @@ class Win11Style:
         }
 
     @classmethod
+    def menu_qss(cls) -> str:
+        """WinUI MenuFlyout 规格的菜单样式（托盘菜单/右键菜单共用）
+
+        规格：8px 外圆角、1px 卡片描边、条目 14px 正文 + 4px 选中圆角、
+        悬停为 subtle 叠层色，分隔线 1px。
+        """
+        c = cls.c()
+        dark = cls.is_dark()
+        hover = "rgba(255,255,255,0.06)" if dark else "rgba(0,0,0,0.05)"
+        return f"""
+            QMenu {{
+                background-color: {c['card_bg']};
+                border: 1px solid {c['card_border']};
+                border-radius: 8px;
+                padding: 3px;
+            }}
+            QMenu::item {{
+                padding: 6px 14px 6px 10px;
+                border-radius: 4px;
+                color: {c['text_primary']};
+                font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI";
+                font-size: 14px;
+            }}
+            QMenu::item:selected {{
+                background: {hover};
+            }}
+            QMenu::item:disabled {{
+                color: {c['text_secondary']};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {c['divider']};
+                margin: 4px 6px;
+                border: none;
+            }}
+            QMenu::icon {{
+                padding-left: 8px;
+                padding-right: 4px;
+            }}
+        """
+
+    @classmethod
     def label_title(cls, text: str) -> QLabel:
+        """设置页分区标题 — Fluent Body Strong（14px Semibold）"""
         c = cls.c()
         label = QLabel(text)
         label.setStyleSheet(
-            f"font-family:{cls.FONT_SERIF};font-size:18px;"
-            f"font-weight:400;color:{c['text_primary']};"
+            f"font-family:{cls.FONT_SANS};font-size:14px;"
+            f"font-weight:600;color:{c['text_primary']};"
             f"background:transparent;padding:8px 0 4px 0;"
-            f"letter-spacing:-0.5px;"
+        )
+        return label
+
+    @classmethod
+    def widget_title(cls, text: str) -> QLabel:
+        """桌面小组件标题 — Fluent Caption Semibold（12px，次要色）"""
+        c = cls.widget_colors()
+        label = QLabel(text)
+        label.setStyleSheet(
+            f"font-family:{cls.FONT_SANS};font-size:12px;"
+            f"font-weight:600;color:{c['text_secondary']};"
+            f"background:transparent;letter-spacing:0.2px;"
         )
         return label
 
@@ -544,42 +598,10 @@ class DesktopWidgetWindow(QWidget):
     def _build_context_menu(self) -> tuple:
         """构建统一右键菜单（组件专属动作 + 系统项），返回 (menu, actions)"""
         from PySide6.QtWidgets import QMenu
-        c = Win11Style.c()
 
         menu = QMenu(self)
-        dark = isDarkTheme()
-        bg = c["card_bg"]
-        border = c["card_border"]
-        text = c["text_primary"]
-        text_dis = c["text_secondary"]
-
-        menu.setStyleSheet(f"""
-            QMenu {{
-                background: {bg};
-                border: 1px solid {border};
-                border-radius: 6px;
-                padding: 4px 0px;
-            }}
-            QMenu::item {{
-                padding: 6px 28px;
-                color: {text};
-                font-family: "Segoe UI Variable", "Microsoft YaHei UI";
-                font-size: 13px;
-            }}
-            QMenu::item:selected {{
-                background: {"rgba(255,255,255,0.08)" if dark else "rgba(0,0,0,0.05)"};
-                border-radius: 4px;
-            }}
-            QMenu::item:disabled {{
-                color: {text_dis};
-            }}
-            QMenu::separator {{
-                height: 1px;
-                background: {"rgba(255,255,255,0.06)" if dark else "rgba(0,0,0,0.06)"};
-                margin: 4px 8px;
-            }}
-            QMenu::indicator {{ width: 16px; height: 16px; }}
-        """)
+        # WinUI MenuFlyout 规格（浅深色自动跟随）
+        menu.setStyleSheet(Win11Style.menu_qss())
 
         act_settings = menu.addAction("组件设置...")
 

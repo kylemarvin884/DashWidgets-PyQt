@@ -37,11 +37,8 @@ class DocumentViewerWidget(WidgetBase):
         main_layout.setContentsMargins(10, 8, 10, 8)
         main_layout.setSpacing(4)
 
-        # 标题
-        title = QLabel("文档查看器")
-        title.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Medium))
-        title.setStyleSheet(f"color: {c['text']}; background: transparent;")
-        main_layout.addWidget(title)
+        # 标题（Fluent Caption Semibold）
+        main_layout.addWidget(Win11Style.widget_title("文档查看器"))
 
         # 文本显示区
         self._text_edit = QTextEdit(self)
