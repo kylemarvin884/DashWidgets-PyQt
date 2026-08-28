@@ -3,6 +3,12 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第十轮：云母真正打通（main.py 全局 QSS 是最后一块挡板）（2026-08-29）
+
+- **根因**：`main.py` 里还残留一整块应用级 Claude QSS——`QWidget { background-color: #faf9f5 }` 强制所有控件不透明米白，此前在 `app/` 目录搜索所以漏掉。删除该 QSS 块与「强制浅色主题」逻辑（主题交还 qfluentwidgets 默认 Auto）。
+- 逐像素验证：完整启动路径下窗口从 `#faf9f5 alpha=255`（不透明）变为 `#ffffff alpha=127`（半透明，Mica 材质透出），并保持稳定。
+- 字体：随包的 HarmonyOS Sans SC 仍作为应用默认字体（中文渲染），Fluent 控件各自的 font-family 不受影响。
+
 ## 第九轮：云母效果、通知与字体（2026-08-29）
 
 - **云母（Mica）打通**：qfluentwidgets `FluentWindow` 本就默认启用 Mica（窗口背景 alpha=0），但页面级不透明 QSS 挡住了它——小组件管理页整页刷成卡片色、分组页等亦有类似问题。全部改为透明背景，Mica 材质得以透出（浅色下半透明灰、卡片浮层；深色趋近实色 #202020，符合 Win11 行为）。
