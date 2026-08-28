@@ -9,7 +9,7 @@ from app.widgets.widget_options import get_option_defaults, get_widget_options
 class TestWidgetOptionsSchema:
     def test_schema_validity(self):
         """所有选项声明必须含 key/label/type，且 type 受支持"""
-        supported = {"bool", "choice", "int"}
+        supported = {"bool", "choice", "int", "currency_pair"}
         for widget_id, options in get_widget_options.__globals__["_WIDGET_OPTIONS"].items():
             assert options, f"{widget_id} 声明了空选项列表"
             for opt in options:
@@ -20,6 +20,8 @@ class TestWidgetOptionsSchema:
                     assert opt.get("choices"), f"{widget_id}.{opt['key']} choice 缺少选项"
                 if opt["type"] == "int":
                     assert "min" in opt and "max" in opt, f"{widget_id}.{opt['key']} int 缺少范围"
+                if opt["type"] == "currency_pair":
+                    assert opt.get("currencies"), f"{widget_id}.{opt['key']} 缺少可选货币"
 
     def test_defaults_consistent(self):
         for widget_id in ("clock", "system_monitor", "network_monitor", "weather",
@@ -78,13 +80,24 @@ class TestWidgetOptionConsumption:
         w.on_settings_changed({"show_artist": True})
         assert w._artist_label.isVisibleTo(w)
 
-    def test_exchange_pairs(self):
-        w = self._create("exchange", {"show_jpy": False, "show_hkd": False})
-        assert not w._pair_rows["JPY"].isVisibleTo(w)
-        assert not w._pair_rows["HKD"].isVisibleTo(w)
-        assert w._pair_rows["USD"].isVisibleTo(w)
-        w.on_settings_changed({"show_jpy": True})
-        assert w._pair_rows["JPY"].isVisibleTo(w)
+    def test_exchange_pairs_configurable(self):
+        """汇率组件按 pair_N 设置渲染任意货币对，配置变化时重建行"""
+        w = self._create("exchange", {"pair_1": ["JPY", "USD"]})
+        assert ("JPY", "USD") in w._rate_labels
+        assert ("EUR", "CNY") in w._rate_labels  # 未配置的行用默认值
+
+        # 配置变化 → 行重建
+        w.on_settings_changed({"pair_1": ["GBP", "JPY"]})
+        assert ("GBP", "JPY") in w._rate_labels
+        assert ("JPY", "USD") not in w._rate_labels
+
+    def test_exchange_cross_rate(self):
+        """任意货币对换算（EUR 中转）"""
+        from app.services.exchange_service import ExchangeService, ExchangeData
+        data = ExchangeData(rates={"EUR": 1.0, "USD": 1.1, "CNY": 7.8}, last_updated=0)
+        assert abs(ExchangeService.cross_rate(data, "USD", "CNY") - 7.8 / 1.1) < 1e-9
+        assert ExchangeService.cross_rate(data, "EUR", "EUR") == 1.0
+        assert ExchangeService.cross_rate(data, "XXX", "CNY") is None
 
     def test_rss_max_items(self):
         w = self._create("rss", {"max_items": 3})

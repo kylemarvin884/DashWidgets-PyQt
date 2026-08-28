@@ -72,3 +72,32 @@ class WidgetBase(QWidget):
         QMenu（会继承透明样式而渲染成黑底）。
         """
         return []
+
+    def register_settings_page(self, page_id: str, title: str,
+                               factory, icon=None) -> bool:
+        """在组件设置窗口注册一个自定义页面（可多次调用注册多页）。
+
+        Parameters
+        ----------
+        page_id : str
+            页面唯一标识（本组件内不可重复）。
+        title : str
+            设置窗口导航栏显示的标题。
+        factory : Callable[[], QWidget]
+            页面内容工厂，返回任意 QWidget（通常为 SettingCard 列表
+            容器）。工厂在设置窗口打开时才调用，可安全捕获 self。
+        icon : FluentIconBase, optional
+            导航图标。
+
+        Returns
+        -------
+        bool
+            注册是否成功（page_id 重复返回 False）。
+        """
+        from app.widgets.widget_options import register_settings_page
+        return register_settings_page(self.WIDGET_TYPE, page_id, title, factory, icon)
+
+    def unregister_settings_pages(self, page_ids: list[str]) -> None:
+        """注销本组件的自定义设置页面（on_close 时调用）"""
+        from app.widgets.widget_options import unregister_settings_pages
+        unregister_settings_pages(self.WIDGET_TYPE, page_ids)

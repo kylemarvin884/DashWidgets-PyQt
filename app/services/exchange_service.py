@@ -2,7 +2,8 @@
 汇率服务
 
 使用 frankfurter.app（欧洲央行参考汇率，免费、无需 API Key）。
-带本地缓存，供汇率小组件在工作线程调用。
+带本地缓存，供汇率小组件在工作线程调用。支持任意基准货币与
+目标货币列表（API 单次请求可携带多货币）。
 """
 from __future__ import annotations
 
@@ -16,16 +17,26 @@ import urllib.request
 
 from loguru import logger
 
-_BASE = "CNY"
-_QUOTES = ["USD", "EUR", "GBP", "JPY", "HKD"]
-_API_URL = f"https://api.frankfurter.app/latest?from={_BASE}&to={','.join(_QUOTES)}"
+
+@dataclass(frozen=True)
+class PairKey:
+    """一个货币对的请求标识（frankfurter 以 EUR 为中转，任意对均可换算）"""
+    base: str
+    quote: str
+
+    @staticmethod
+    def of(base: str, quote: str) -> "PairKey":
+        return PairKey(base.upper(), quote.upper())
 
 
 @dataclass
 class ExchangeData:
-    """以 CNY 为基准的汇率：1 单位外币 = X 人民币"""
-    rates: dict[str, float]  # {外币代码: 每1外币兑CNY}
+    """任意货币对的汇率：1 单位 base = X quote"""
+    rates: dict[str, float]  # {"BASE/QUOTE": 每1 base 兑 quote 数}
     last_updated: float
+
+    def rate_for(self, base: str, quote: str) -> Optional[float]:
+        return self.rates.get(f"{base.upper()}/{quote.upper()}")
 
 
 class ExchangeService:
@@ -50,7 +61,11 @@ class ExchangeService:
 
     def get_rates(self, force_refresh: bool = False) -> ExchangeData:
         """
-        获取汇率数据（CNY 基准）。缓存过期时发起网络请求。
+        获取汇率数据。缓存过期时发起一次网络请求。
+
+        以 EUR 为中转：一次请求取 EUR→各货币的汇率，任意货币对
+        (A/B) 的汇率 = EUR→B ÷ EUR→A。缓存里保存的是 EUR→X 的
+        原始值，展示时按需换算，支持任意货币组合。
 
         Raises
         ------
@@ -67,29 +82,45 @@ class ExchangeService:
                     return self._data
 
             try:
-                req = urllib.request.Request(_API_URL, headers={"User-Agent": "DashWidgets/1.0"})
+                symbols = ",".join(self._SUPPORTED_CURRENCIES)
+                url = f"https://api.frankfurter.app/latest?from=EUR&to={symbols}"
+                req = urllib.request.Request(url, headers={"User-Agent": "DashWidgets/1.0"})
                 with urllib.request.urlopen(req, timeout=10) as response:
                     payload = json.loads(response.read().decode("utf-8"))
 
-                base_rates = payload.get("rates", {})  # {外币: 每1 CNY 兑外币}
-                if not base_rates:
+                rates = payload.get("rates", {})
+                if not rates:
                     raise ValueError("API 返回为空")
-
-                # 换算为 "1 外币 = X CNY"，便于直接展示
-                rates = {}
-                for code, per_cny in base_rates.items():
-                    if per_cny:
-                        rates[code] = 1.0 / float(per_cny)
+                rates["EUR"] = 1.0  # 基准本身
 
                 self._data = ExchangeData(rates=rates, last_updated=time.time())
                 self._save_cache()
-                logger.info("获取汇率成功: {}", ", ".join(f"{k}={v:.4f}" for k, v in rates.items()))
+                logger.info("获取汇率成功: {} 个货币", len(rates))
                 return self._data
             except Exception as e:
                 logger.error(f"获取汇率失败: {e}")
                 if self._data:
                     return self._data  # 离线时回退到旧缓存
                 raise RuntimeError(f"获取汇率失败: {e}") from e
+
+    # 支持的货币（frankfurter 全集）
+    _SUPPORTED_CURRENCIES = [
+        "USD", "EUR", "GBP", "JPY", "HKD", "CNY", "KRW", "AUD", "CAD", "CHF",
+        "SGD", "NZD", "INR", "THB", "MYR", "SEK", "NOK", "DKK", "PLN", "CZK",
+    ]
+
+    @staticmethod
+    def cross_rate(data: ExchangeData, base: str, quote: str) -> Optional[float]:
+        """计算任意货币对汇率：1 base = ? quote（EUR 中转换算）"""
+        base = base.upper()
+        quote = quote.upper()
+        if base == quote:
+            return 1.0
+        r_base = data.rates.get(base)
+        r_quote = data.rates.get(quote)
+        if not r_base or not r_quote:
+            return None
+        return r_quote / r_base
 
     # ------------------------------------------------------------------ #
     # 缓存

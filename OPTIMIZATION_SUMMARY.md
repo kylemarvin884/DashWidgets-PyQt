@@ -1,7 +1,12 @@
 # 优化总结（2026-08-28）
 
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
-测试基线：`uv run pytest` → **85 passed**（优化前 17 个用例中 1 个失败）。
+测试基线：`uv run pytest` → **86 passed**（优化前 17 个用例中 1 个失败）。
+
+## 第十五轮：汇率货币对自定义 + 自定义设置页面 API（2026-08-29）
+
+- **汇率组件每行货币对可自定义**：选项 schema 新增 `currency_pair` 类型（一行 = 基准货币 + 目标货币两个下拉），汇率组件的 5 行各自可选任意两种货币组合；`ExchangeService` 改为 EUR 中转（一次请求取 EUR→20 种货币，任意对 A/B 汇率 = EUR→B ÷ EUR→A，`cross_rate()` 静态换算），配置变化时组件重建行并刷新。
+- **自定义设置页面 API**：`widget_options.register_settings_page(widget_id, page_id, title, factory, icon)` — 组件/插件可在组件设置窗口注册**多个**自定义页面（page_id 去重、工厂延迟调用、可注销）；`WidgetBase.register_settings_page()` 提供组件侧便捷入口；设置窗口把注册的页面追加为独立导航页。
 
 ## 第十四轮：组件布局/样式打磨（2026-08-29）
 

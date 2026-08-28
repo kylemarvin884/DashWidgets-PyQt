@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor
 from qfluentwidgets import (
     BodyLabel, PushButton,
     SettingCard, SwitchSettingCard, RangeSettingCard, OptionsSettingCard,
-    StrongBodyLabel,
+    StrongBodyLabel, ComboBox,
     LineEdit, ToolButton, FluentIcon as FIF,
     PrimaryPushButton, FluentWindow, isDarkTheme, ScrollArea,
 )
@@ -99,6 +99,48 @@ class _SettingsPage(ScrollArea):
         lbl = StrongBodyLabel(text)
         lbl.setStyleSheet("padding: 4px 2px 0 2px;")
         self.add_widget(lbl)
+
+
+class _CurrencyPairSettingCard(SettingCard):
+    """货币对选择卡片（一行显示哪两种货币的汇率）"""
+
+    def __init__(self, icon, title: str, currencies: list[str],
+                 value: tuple[str, str], callback, parent=None):
+        super().__init__(icon, title, "选择该行显示的两种货币", parent)
+        self._callback = callback
+        self._currencies = currencies
+
+        self._base_combo = ComboBox(self)
+        self._base_combo.addItems(currencies)
+        self._quote_combo = ComboBox(self)
+        self._quote_combo.addItems(currencies)
+        for combo in (self._base_combo, self._quote_combo):
+            combo.setMinimumWidth(86)
+            combo.currentIndexChanged.connect(self._on_changed)
+
+        self.setValue(value)
+
+        self.hBoxLayout.addSpacing(4)
+        self.hBoxLayout.addWidget(self._base_combo, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addWidget(BodyLabel("/"), 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addWidget(self._quote_combo, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addSpacing(16)
+
+    def setValue(self, value: tuple[str, str]):
+        base, quote = value
+        if base in self._currencies:
+            self._base_combo.setCurrentIndex(self._currencies.index(base))
+        if quote in self._currencies:
+            self._quote_combo.setCurrentIndex(self._currencies.index(quote))
+
+    def _on_changed(self, _i):
+        base = self._currencies[self._base_combo.currentIndex()]
+        quote = self._currencies[self._quote_combo.currentIndex()]
+        self._callback((base, quote))
+
+    def value(self) -> tuple[str, str]:
+        return (self._currencies[self._base_combo.currentIndex()],
+                self._currencies[self._quote_combo.currentIndex()])
 
 
 class WidgetSettingsWindow(FluentWindow):
@@ -239,10 +281,41 @@ class WidgetSettingsWindow(FluentWindow):
                     f"范围 {opt.get('min', 0)} – {opt.get('max', 99)}",
                     int(opt.get("min", 0)), int(opt.get("max", 99)),
                     int(default or 0), key, settings, self._option_controls)
+            elif kind == "currency_pair":
+                currencies = opt.get("currencies", [])
+                stored = settings.get(key, default)
+                if not (isinstance(stored, (list, tuple)) and len(stored) == 2):
+                    stored = default or ["USD", "CNY"]
+                card = _CurrencyPairSettingCard(
+                    icon, opt["label"], currencies, tuple(stored),
+                    callback=lambda v, k=key: self._apply_key(k, list(v)),
+                    parent=self,
+                )
+                self._option_controls[key] = ("pair", card, default)
             else:
                 continue
 
             page.add_card(card)
+
+        # ── 组件/插件注册的自定义设置页面（追加为独立导航页，可多个）──
+        self._add_custom_pages()
+
+    def _add_custom_pages(self) -> None:
+        """把组件/插件注册的自定义设置页面加为独立导航页（可多个）"""
+        from app.widgets.widget_options import get_settings_pages
+
+        for spec in get_settings_pages(self.widget_id):
+            try:
+                page = _SettingsPage(f"widgetSettings_{spec['page_id']}")
+                widget = spec["factory"]()
+                if widget is None:
+                    continue
+                page.add_widget(widget)
+                icon = spec.get("icon") or FIF.INFO
+                self.addSubInterface(page, icon, spec["title"])
+            except Exception:
+                from loguru import logger
+                logger.exception("注册组件自定义设置页面失败: {}", spec.get("page_id"))
 
     @staticmethod
     def _icon_for(opt: dict) -> Any:
