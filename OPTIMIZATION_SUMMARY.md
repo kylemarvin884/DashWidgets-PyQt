@@ -1,7 +1,15 @@
 # 优化总结（2026-08-28）
 
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
-测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
+测试基线：`uv run pytest` → **85 passed**（优化前 17 个用例中 1 个失败）。
+
+## 第十二轮：组件设置对话框重写为原生 SettingCard（2026-08-29）
+
+- **推倒重写**：原来 569 行手写行布局（`标签: + 控件 + addStretch`）、"显示秒数"用是/否下拉、时钟/通用两套重复代码、无恢复默认。现在整体换为 qfluentwidgets 原生 **SettingCard 卡片**（图标 + 标题/描述 + 右侧控件），与主窗口设置页同一视觉语言：滑杆用 `RangeSettingCard`、布尔项用 `SwitchSettingCard`（原生开关替代是/否下拉）、多选项用 `OptionsSettingCard`、颜色用自绘 `_ColorSettingCard`（色块点击弹 QColorDialog）。
+- **实现要点**：qfluentwidgets 的卡片需要 ConfigItem 驱动，为每张卡片创建独立临时 ConfigItem（RangeConfigItem/OptionsConfigItem/ConfigItem），`valueChanged/checkedChanged` 桥接到单键即时保存与组件推送；时钟透明度卡片（百分比）与 0-1 存储值之间的换算收敛在一处。
+- **分区**：「外观」/「信息显示」/「快捷方式」三区，底部新增 **恢复默认** 按钮与「完成」。
+- **存储语义优化**：只在用户实际改动某项时写入该键（旧版打开对话框就写入全部键），未改动的键由组件默认值兜底。
+- 修复滑杆 268px 最小宽导致的卡片溢出。
 
 ## 第十一轮：字体统一（主页标题与全库 44 处手写字体）（2026-08-29）
 

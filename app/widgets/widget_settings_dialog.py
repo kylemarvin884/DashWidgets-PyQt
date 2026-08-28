@@ -1,15 +1,13 @@
 """
-小组件设置对话框 — 统一版
+小组件设置对话框 — qfluentwidgets 原生 SettingCard 风格
 
-支持两种调用方式：
-  1. 从 widgets_view 右键/齿轮按钮：传入 widget_id，实时推送到运行中的组件
-  2. 从 desktop_widget_service 右键菜单：传入 widget_id，实时推送
+结构：每个设置项是一张 SettingCard（图标 + 标题/描述 + 右侧控件），
+与主窗口设置页视觉一致。所有变更实时生效（无保存按钮），
+支持一键恢复默认值。
 
-所有设置变更立即生效（无保存按钮）。
-
-注意：本对话框可能以桌面组件窗口为父窗口，而组件窗口的 QSS 是
-``background: transparent``（样式表会沿父子链传播）。因此这里必须
-设置自己的样式表覆盖继承值，否则对话框背景渲染为黑色。
+实现说明：qfluentwidgets 的 SettingCard 系列需要 ConfigItem 驱动，
+这里为每张卡片创建独立的临时 ConfigItem（不写入 qconfig 持久化），
+valueChanged 信号桥接到组件设置的即时保存与推送。
 """
 from __future__ import annotations
 from typing import Any, Optional
@@ -22,20 +20,57 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from qfluentwidgets import (
-    BodyLabel, PrimaryPushButton, PushButton,
-    CardWidget, SpinBox, DoubleSpinBox,
-    ComboBox, StrongBodyLabel,
+    BodyLabel, PushButton,
+    SettingCard, SwitchSettingCard, RangeSettingCard, OptionsSettingCard,
+    StrongBodyLabel,
     LineEdit, ToolButton, FluentIcon as FIF,
-    Slider, qconfig, SwitchButton,
+    PrimaryPushButton, isDarkTheme,
+)
+from qfluentwidgets.common.config import (
+    ConfigItem, RangeConfigItem, OptionsConfigItem, RangeValidator, OptionsValidator,
 )
 
 from app.models.widget_model import WidgetModel, WidgetInfo
-from app.services.desktop_widget_service import Win11Style
-from app.widgets.widget_options import get_widget_options
+from app.widgets.widget_options import get_widget_options, get_option_defaults
+
+
+class _ColorSettingCard(SettingCard):
+    """颜色选择卡片（SettingCard + 色块按钮）"""
+
+    def __init__(self, title: str, color: str, callback, parent=None):
+        super().__init__(FIF.PALETTE, title, "点击色块选择自定义颜色", parent)
+        self._callback = callback
+        self._color = QColor(color)
+
+        self._swatch = QWidget(self)
+        self._swatch.setFixedSize(24, 24)
+        self._swatch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._swatch.mousePressEvent = lambda _e: self.pick()
+        self.hBoxLayout.addWidget(self._swatch, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addSpacing(16)
+        self._apply_swatch()
+
+    def _apply_swatch(self):
+        border = "rgba(255,255,255,0.25)" if isDarkTheme() else "rgba(0,0,0,0.15)"
+        self._swatch.setStyleSheet(
+            f"background: {self._color.name()}; border-radius: 4px;"
+            f"border: 1px solid {border};"
+        )
+
+    def pick(self):
+        c = QColorDialog.getColor(self._color, self, "选择颜色",
+                                  QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        if c.isValid():
+            self.setColor(c.name())
+            self._callback(self._color.name())
+
+    def setColor(self, color: str):
+        self._color = QColor(color)
+        self._apply_swatch()
 
 
 class WidgetSettingsDialog(QDialog):
-    """小组件设置对话框 — 实时刷新，无需保存按钮"""
+    """小组件设置对话框 — SettingCard 卡片式，实时生效"""
 
     widget_id: str
     _widget_model: WidgetModel
@@ -49,371 +84,254 @@ class WidgetSettingsDialog(QDialog):
         self.widget_info = self._widget_model.get_widget(widget_id)
 
         widget_name = self.widget_info.name if self.widget_info else widget_id
-        self.setWindowTitle(f"设置 - {widget_name}")
-        self.setMinimumWidth(450)
-        # 覆盖父窗口传播下来的 transparent 背景（否则对话框渲染为黑色）
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
-        )
+        self.setWindowTitle(f"组件设置 - {widget_name}")
+        self.setMinimumWidth(520)
 
         self._current_color: QColor = QColor("#FFFFFF")
+        # 「信息显示」选项控件注册表 {key: (kind, card, default)}
+        self._option_controls: dict[str, tuple[str, Any, Any]] = {}
+        # 外观卡片注册表（恢复默认用）
+        self._appearance_controls: dict[str, tuple[str, Any, Any]] = {}
 
-        self._init_ui()
-        self._apply_theme()
-        qconfig.themeChanged.connect(self._apply_theme)
-        self._load_settings()
+        settings: dict[str, Any] = (
+            self.widget_info.custom_settings if self.widget_info else {}
+        ) or {}
 
-    def _apply_theme(self, _theme=None) -> None:
-        """主题感知样式：跟随浅色奶油/深色海军蓝设计系统"""
-        c = Win11Style.c()
-        self.setStyleSheet(f"""
-            WidgetSettingsDialog, QDialog {{
-                background-color: {c['bg']};
-            }}
-            QLabel, BodyLabel, StrongBodyLabel {{
-                color: {c['text_primary']};
-                background: transparent;
-            }}
-            QScrollArea {{
-                border: 1px solid {c['card_border']};
-                border-radius: 6px;
-                background: {c['surface_soft']};
-            }}
-            QScrollBar:vertical {{ width: 8px; background: transparent; }}
-            QScrollBar::handle:vertical {{
-                background: {c['card_border']}; border-radius: 4px; min-height: 20px;
-            }}
-            QScrollBar::handle:vertical:hover {{ background: {c['text_secondary']}; }}
-            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-        """)
+        self._init_ui(settings)
 
-    def _init_ui(self) -> None:
+    # ------------------------------------------------------------------ #
+    # UI 构建
+    # ------------------------------------------------------------------ #
+
+    def _init_ui(self, settings: dict[str, Any]) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(8)
 
-        title = StrongBodyLabel("组件设置")
-        layout.addWidget(title)
+        # ── 外观分区 ──
+        layout.addWidget(self._section_label("外观"))
+        self._build_appearance_group(layout, settings)
 
-        form_card = CardWidget()
-        form_layout = QVBoxLayout(form_card)
-        form_layout.setContentsMargins(20, 20, 20, 20)
-        form_layout.setSpacing(16)
-
-        # ════════════════════════════════════
-        #  时钟专用设置（实时生效）
-        # ════════════════════════════════════
-        if self.widget_id == "clock":
-            self._build_clock_settings(form_layout)
-        else:
-            # ════════════════════════════════════
-            #  其他组件的通用设置
-            # ════════════════════════════════════
-            self._build_general_settings(form_layout)
-
-        layout.addWidget(form_card)
-
-        # ════════════════════════════════════
-        #  信息显示（声明式选项，部分组件提供）
-        # ════════════════════════════════════
+        # ── 信息显示分区（声明式选项）──
         options = get_widget_options(self.widget_id)
         if options:
-            info_card = CardWidget()
-            info_layout = QVBoxLayout(info_card)
-            info_layout.setContentsMargins(20, 20, 20, 20)
-            info_layout.setSpacing(14)
+            layout.addSpacing(8)
+            layout.addWidget(self._section_label("信息显示"))
+            self._build_display_group(layout, options, settings)
 
-            info_title = StrongBodyLabel("信息显示")
-            info_layout.addWidget(info_title)
-            self._build_display_options(info_layout, options)
-            layout.addWidget(info_card)
-
-        # 快捷方式列表（仅快捷方式）
+        # ── 快捷方式分区 ──
         if self.widget_id == "shortcut":
-            self._build_shortcut_list(form_layout)
+            layout.addSpacing(8)
+            layout.addWidget(self._section_label("快捷方式"))
+            self._build_shortcut_list(layout, settings)
 
-        # 底部：只保留关闭按钮
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        close_btn = PrimaryPushButton("关闭")
+        layout.addStretch()
+
+        # ── 底部操作 ──
+        btn_row = QHBoxLayout()
+        reset_btn = PushButton(FIF.SYNC, "恢复默认")
+        reset_btn.clicked.connect(self._reset_defaults)
+        btn_row.addWidget(reset_btn)
+        btn_row.addStretch()
+        close_btn = PrimaryPushButton("完成")
         close_btn.clicked.connect(self.close)
-        btn_layout.addWidget(close_btn)
-        layout.addLayout(btn_layout)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    @staticmethod
+    def _section_label(text: str) -> QLabel:
+        lbl = StrongBodyLabel(text)
+        lbl.setStyleSheet("padding: 4px 2px 0 2px;")
+        return lbl
 
     # ------------------------------------------------------------------ #
-    # 信息显示选项（schema 驱动）
+    # 卡片工厂（每卡独立 ConfigItem，信号桥到 _apply_key）
     # ------------------------------------------------------------------ #
 
-    def _build_display_options(self, parent_layout: QVBoxLayout, options: list[dict]) -> None:
-        """按声明渲染开关/下拉/数字控件，全部实时生效"""
-        self._option_controls: dict[str, tuple[str, Any]] = {}
+    def _make_range_card(self, icon, title: str, content: str,
+                         lo: int, hi: int, default: int,
+                         key: str, settings: dict, registry: dict) -> RangeSettingCard:
+        item = RangeConfigItem(
+            group=f"widget.{self.widget_id}", name=key,
+            default=default, validator=RangeValidator(lo, hi),
+        )
+        card = RangeSettingCard(item, icon, title, content, parent=self)
+        # 默认滑杆 268px 在本对话框宽度下会溢出卡片，压缩到可用宽度
+        card.slider.setMinimumWidth(150)
+        card.slider.setMaximumWidth(200)
+        card.setValue(int(settings.get(key, default)))
+        card.valueChanged.connect(lambda v, k=key: self._apply_key(k, v))
+        registry[key] = ("range", card, default)
+        return card
 
+    def _make_options_card(self, icon, title: str, content: str,
+                           texts: list[str], default: str,
+                           key: str, settings: dict, registry: dict) -> OptionsSettingCard:
+        item = OptionsConfigItem(
+            group=f"widget.{self.widget_id}", name=key,
+            default=default, validator=OptionsValidator(texts),
+        )
+        card = OptionsSettingCard(item, icon, title, content, texts=texts, parent=self)
+        cur = settings.get(key, default)
+        if cur in texts:
+            card.setValue(cur)
+        item.valueChanged.connect(lambda val, k=key: self._apply_key(k, val))
+        registry[key] = ("options", card, default)
+        return card
+
+    def _make_switch_card(self, icon, title: str, content: str,
+                          default: bool, key: str, settings: dict,
+                          registry: dict) -> SwitchSettingCard:
+        item = ConfigItem(group=f"widget.{self.widget_id}", name=key, default=default)
+        card = SwitchSettingCard(icon, title, content, configItem=item, parent=self)
+        card.setChecked(bool(settings.get(key, default)))
+        card.checkedChanged.connect(lambda on, k=key: self._apply_key(k, on))
+        registry[key] = ("switch", card, default)
+        return card
+
+    # ------------------------------------------------------------------ #
+    # 外观分区
+    # ------------------------------------------------------------------ #
+
+    def _build_appearance_group(self, layout: QVBoxLayout, settings: dict) -> None:
+        cards: list[SettingCard] = []
+        is_clock = self.widget_id == "clock"
+        reg = self._appearance_controls
+
+        if is_clock:
+            cards.append(self._make_range_card(
+                FIF.FONT, "字体大小", "时钟文字的显示尺寸",
+                16, 120, 52, "font_size", settings, reg))
+
+            self._color_card = _ColorSettingCard(
+                "文字颜色",
+                settings.get("text_color", "#FFFFFF"),
+                lambda name: self._apply_key("text_color", name),
+                parent=self,
+            )
+            reg["text_color"] = ("color", self._color_card, "#FFFFFF")
+            cards.append(self._color_card)
+        else:
+            cards.append(self._make_range_card(
+                FIF.APPLICATION, "圆角大小", "组件卡片的圆角半径",
+                0, 30, 16, "border_radius", settings, reg))
+
+        # 透明度（所有组件）
+        lo, hi = (30, 100) if is_clock else (50, 100)
+        default_op = 1.0 if is_clock else 0.95
+        cards.append(self._make_range_card(
+            FIF.BRIGHTNESS, "透明度", "组件窗口的整体不透明度（%）",
+            lo, hi, int(default_op * 100), "opacity_pct", settings, reg))
+        # opacity_pct 的变化换算成 0-1 存储
+        _, card, _d = reg.pop("opacity_pct")
+        self._opacity_card = card
+        reg["opacity"] = ("opacity", card, default_op)
+        card.valueChanged.disconnect()
+        card.valueChanged.connect(lambda v: self._apply_key("opacity", v / 100.0))
+
+        if not is_clock:
+            cards.append(self._make_options_card(
+                FIF.BACK_TO_WINDOW, "阴影强度", "组件的阴影视觉效果",
+                ["无", "轻微", "中等", "强烈"], "轻微", "shadow", settings, reg))
+
+        for card in cards:
+            layout.addWidget(card)
+
+    # ------------------------------------------------------------------ #
+    # 信息显示分区（schema 驱动）
+    # ------------------------------------------------------------------ #
+
+    def _build_display_group(self, layout: QVBoxLayout,
+                             options: list[dict], settings: dict) -> None:
         for opt in options:
-            row = QHBoxLayout()
-            row.setSpacing(12)
-            label = BodyLabel(opt["label"])
-            label.setMinimumWidth(110)
-            row.addWidget(label)
-            row.addStretch()
+            key, kind = opt["key"], opt["type"]
+            default = opt.get("default")
+            icon = self._icon_for(opt)
 
-            kind = opt["type"]
             if kind == "bool":
-                ctrl = SwitchButton()
-                ctrl.setChecked(bool(opt.get("default", False)))
-                ctrl.checkedChanged.connect(lambda _v: self._apply_realtime())
-                row.addWidget(ctrl)
+                card = self._make_switch_card(
+                    icon, opt["label"], "开启后显示于组件上",
+                    bool(default), key, settings, self._option_controls)
             elif kind == "choice":
-                ctrl = ComboBox()
-                for value, display in opt.get("choices", []):
-                    ctrl.addItem(display, userData=value)
-                ctrl.currentIndexChanged.connect(lambda _i: self._apply_realtime())
-                row.addWidget(ctrl)
+                choices = opt.get("choices", [])
+                card = self._make_options_card(
+                    icon, opt["label"], "",
+                    [display for _v, display in choices],
+                    default, key, settings, self._option_controls)
             elif kind == "int":
-                ctrl = SpinBox()
-                ctrl.setRange(int(opt.get("min", 0)), int(opt.get("max", 99)))
-                if opt.get("suffix"):
-                    ctrl.setSuffix(opt["suffix"])
-                ctrl.setValue(int(opt.get("default", 0)))
-                ctrl.valueChanged.connect(lambda _v: self._apply_realtime())
-                row.addWidget(ctrl)
+                card = self._make_range_card(
+                    icon, opt["label"],
+                    f"范围 {opt.get('min', 0)} – {opt.get('max', 99)}",
+                    int(opt.get("min", 0)), int(opt.get("max", 99)),
+                    int(default or 0), key, settings, self._option_controls)
             else:
                 continue
 
-            parent_layout.addLayout(row)
-            self._option_controls[opt["key"]] = (kind, ctrl)
+            layout.addWidget(card)
 
-    def _load_option_values(self, settings: dict) -> None:
-        """把已保存的设置值回填到信息显示控件"""
-        if not hasattr(self, "_option_controls"):
-            return
-        for key, (kind, ctrl) in self._option_controls.items():
-            value = settings.get(key)
-            if value is None:
-                continue
-            try:
-                if kind == "bool":
-                    ctrl.setChecked(bool(value))
-                elif kind == "choice":
-                    idx = ctrl.findData(value)
-                    if idx >= 0:
-                        ctrl.setCurrentIndex(idx)
-                elif kind == "int":
-                    ctrl.setValue(int(value))
-            except Exception:
-                pass
+    @staticmethod
+    def _icon_for(opt: dict) -> Any:
+        """按选项 key 选一个贴切的 Fluent 图标"""
+        key = opt.get("key", "")
+        mapping = {
+            "show_date": FIF.CALENDAR, "show_seconds": FIF.DATE_TIME,
+            "show_cpu": FIF.SPEED_HIGH, "show_mem": FIF.IOT, "show_disk": FIF.SAVE,
+            "show_cpu_freq": FIF.SPEED_OFF, "show_totals": FIF.CLOUD,
+            "show_detail": FIF.CLOUD, "show_artist": FIF.MUSIC, "show_time": FIF.HISTORY,
+            "max_items": FIF.MARKET, "show_source": FIF.FEEDBACK,
+            "show_usd": FIF.SHOPPING_CART, "show_eur": FIF.SHOPPING_CART,
+            "show_gbp": FIF.SHOPPING_CART, "show_jpy": FIF.SHOPPING_CART,
+            "show_hkd": FIF.SHOPPING_CART,
+        }
+        return mapping.get(key, FIF.INFO)
 
-    def _collect_option_values(self, settings: dict) -> None:
-        """把信息显示控件的当前值写入 settings"""
-        if not hasattr(self, "_option_controls"):
-            return
-        for key, (kind, ctrl) in self._option_controls.items():
-            try:
-                if kind == "bool":
-                    settings[key] = ctrl.isChecked()
-                elif kind == "choice":
-                    settings[key] = ctrl.currentData()
-                elif kind == "int":
-                    settings[key] = ctrl.value()
-            except Exception:
-                pass
+    # ------------------------------------------------------------------ #
+    # 快捷方式分区
+    # ------------------------------------------------------------------ #
 
-    def _build_clock_settings(self, form_layout: QVBoxLayout) -> None:
-        """时钟专用设置：显示秒数、字体大小、文字颜色、透明度"""
-        # ── 显示秒数 ──
-        sec_row = QHBoxLayout()
-        sec_row.setSpacing(12)
-        sec_label = BodyLabel("显示秒数:")
-        sec_label.setMinimumWidth(80)
-        sec_row.addWidget(sec_label)
-        self._show_seconds_combo = ComboBox()
-        self._show_seconds_combo.addItems(["否", "是"])
-        self._show_seconds_combo.setMinimumWidth(200)
-        self._show_seconds_combo.currentIndexChanged.connect(lambda: self._apply_realtime())
-        sec_row.addWidget(self._show_seconds_combo)
-        sec_row.addStretch()
-        form_layout.addLayout(sec_row)
-
-        # ── 字体大小滑块 ──
-        fs_row = QHBoxLayout()
-        fs_row.setSpacing(12)
-        fs_label = BodyLabel("字体大小:")
-        fs_label.setMinimumWidth(80)
-        fs_row.addWidget(fs_label)
-        self._font_size_slider = Slider(Qt.Orientation.Horizontal)
-        self._font_size_slider.setRange(16, 120)
-        self._font_size_slider.setValue(52)
-        self._font_size_slider.setMinimumWidth(180)
-        self._font_size_val = BodyLabel("52 px")
-        self._font_size_val.setFixedWidth(50)
-        self._font_size_slider.valueChanged.connect(
-            lambda v: (self._font_size_val.setText(f"{v} px"), self._apply_realtime())
-        )
-        fs_row.addWidget(self._font_size_slider)
-        fs_row.addWidget(self._font_size_val)
-        fs_row.addStretch()
-        form_layout.addLayout(fs_row)
-
-        # ── 文字颜色 ──
-        color_row = QHBoxLayout()
-        color_row.setSpacing(12)
-        color_label = BodyLabel("文字颜色:")
-        color_label.setMinimumWidth(80)
-        color_row.addWidget(color_label)
-
-        self._color_btn = PushButton("选择颜色", self)
-        self._color_btn.setFixedWidth(100)
-        self._color_btn.clicked.connect(self._pick_color)
-        self._color_preview = QWidget()
-        self._color_preview.setFixedSize(28, 28)
-        self._color_preview.setStyleSheet(
-            "background: #FFFFFF; border-radius: 4px; border:1px solid rgba(0,0,0,0.15);"
-        )
-        color_row.addWidget(self._color_btn)
-        color_row.addWidget(self._color_preview)
-        color_row.addStretch()
-        form_layout.addLayout(color_row)
-
-        # ── 透明度 ──
-        op_row = QHBoxLayout()
-        op_row.setSpacing(12)
-        op_label = BodyLabel("透明度:")
-        op_label.setMinimumWidth(80)
-        op_row.addWidget(op_label)
-        self._opacity_spin = DoubleSpinBox()
-        self._opacity_spin.setRange(30, 100)
-        self._opacity_spin.setSuffix(" %")
-        self._opacity_spin.setSingleStep(5)
-        self._opacity_spin.setValue(100)
-        self._opacity_spin.setMinimumWidth(200)
-        self._opacity_spin.valueChanged.connect(lambda v: self._apply_realtime())
-        op_row.addWidget(self._opacity_spin)
-        op_row.addStretch()
-        form_layout.addLayout(op_row)
-
-    def _build_general_settings(self, form_layout: QVBoxLayout) -> None:
-        """通用组件设置：尺寸、圆角、透明度、阴影"""
-        # 组件尺寸
-        size_layout = QHBoxLayout()
-        size_layout.setSpacing(12)
-        size_label = BodyLabel("组件尺寸:")
-        size_label.setMinimumWidth(80)
-        size_layout.addWidget(size_label)
-        self._size_combo = ComboBox()
-        self._size_combo.addItems(["小", "中", "大"])
-        self._size_combo.setMinimumWidth(200)
-        self._size_combo.currentIndexChanged.connect(lambda: self._apply_realtime())
-        size_layout.addWidget(self._size_combo)
-        size_layout.addStretch()
-        form_layout.addLayout(size_layout)
-
-        # 圆角
-        radius_layout = QHBoxLayout()
-        radius_layout.setSpacing(12)
-        radius_label = BodyLabel("圆角大小:")
-        radius_label.setMinimumWidth(80)
-        radius_layout.addWidget(radius_label)
-        self._radius_spin = SpinBox()
-        self._radius_spin.setRange(0, 30)
-        self._radius_spin.setSuffix(" px")
-        self._radius_spin.setMinimumWidth(200)
-        self._radius_spin.valueChanged.connect(lambda v: self._apply_realtime())
-        radius_layout.addWidget(self._radius_spin)
-        radius_layout.addStretch()
-        form_layout.addLayout(radius_layout)
-
-        # 透明度
-        opacity_layout = QHBoxLayout()
-        opacity_layout.setSpacing(12)
-        opacity_label = BodyLabel("透明度:")
-        opacity_label.setMinimumWidth(80)
-        opacity_layout.addWidget(opacity_label)
-        self._opacity_spin = DoubleSpinBox()
-        self._opacity_spin.setRange(50, 100)
-        self._opacity_spin.setSuffix(" %")
-        self._opacity_spin.setSingleStep(5)
-        self._opacity_spin.setMinimumWidth(200)
-        self._opacity_spin.valueChanged.connect(lambda v: self._apply_realtime())
-        opacity_layout.addWidget(self._opacity_spin)
-        opacity_layout.addStretch()
-        form_layout.addLayout(opacity_layout)
-
-        # 阴影
-        shadow_layout = QHBoxLayout()
-        shadow_layout.setSpacing(12)
-        shadow_label = BodyLabel("阴影强度:")
-        shadow_label.setMinimumWidth(80)
-        shadow_layout.addWidget(shadow_label)
-        self._shadow_combo = ComboBox()
-        self._shadow_combo.addItems(["无", "轻微", "中等", "强烈"])
-        self._shadow_combo.setMinimumWidth(200)
-        self._shadow_combo.currentIndexChanged.connect(lambda: self._apply_realtime())
-        shadow_layout.addWidget(self._shadow_combo)
-        shadow_layout.addStretch()
-        form_layout.addLayout(shadow_layout)
-
-    def _build_shortcut_list(self, form_layout: QVBoxLayout) -> None:
+    def _build_shortcut_list(self, layout: QVBoxLayout, settings: dict) -> None:
         self._shortcut_widgets: list[dict] = []
-        shortcut_title = StrongBodyLabel("快捷方式列表")
-        form_layout.addSpacing(8)
-        form_layout.addWidget(shortcut_title)
-
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setMinimumHeight(150)
+        scroll_area.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        scroll_area.viewport().setAutoFillBackground(False)
         self._shortcut_container = QWidget()
+        self._shortcut_container.setStyleSheet("background: transparent;")
         self._shortcut_layout = QVBoxLayout(self._shortcut_container)
         self._shortcut_layout.setContentsMargins(8, 8, 8, 8)
         self._shortcut_layout.setSpacing(8)
         self._shortcut_layout.addStretch()
         scroll_area.setWidget(self._shortcut_container)
-        form_layout.addWidget(scroll_area)
+        layout.addWidget(scroll_area)
 
         add_btn = PushButton(FIF.ADD, "添加快捷方式")
         add_btn.clicked.connect(self._add_shortcut_row)
-        form_layout.addWidget(add_btn)
+        layout.addWidget(add_btn)
 
-    # ── 实时应用 ──────────────────────────────────────── #
+        for s in settings.get("shortcuts", []):
+            self._add_shortcut_row(s)
 
-    def _apply_realtime(self) -> None:
-        """收集当前所有控件值 → 立即保存并应用到桌面组件"""
+    # ------------------------------------------------------------------ #
+    # 实时应用
+    # ------------------------------------------------------------------ #
+
+    def _apply_key(self, key: str, value: Any) -> None:
+        """单键更新：保存并即时推送到运行中的组件"""
         if self.widget_info is None:
             return
-
-        settings = self._collect_settings()
+        settings = self.widget_info.custom_settings or {}
+        settings[key] = value
         self.widget_info.custom_settings = settings
         self._widget_model.save()
         self._push_to_widget(settings)
 
-    def _collect_settings(self) -> dict[str, Any]:
-        """从所有控件收集当前值"""
-        d: dict[str, Any] = {}
-
-        if self.widget_id == "clock":
-            if hasattr(self, '_show_seconds_combo'):
-                d["show_seconds"] = self._show_seconds_combo.currentIndex() == 1
-            if hasattr(self, '_font_size_slider'):
-                d["font_size"] = self._font_size_slider.value()
-            c = getattr(self, '_current_color', None)
-            if c:
-                d["text_color"] = f"#{c.red():02x}{c.green():02x}{c.blue():02x}"
-            if hasattr(self, '_opacity_spin'):
-                d["opacity"] = self._opacity_spin.value() / 100.0
-        else:
-            if hasattr(self, '_size_combo'):
-                sz_map = {"小": "small", "中": "medium", "大": "large"}
-                d["size"] = sz_map.get(self._size_combo.currentText(), "medium")
-            if hasattr(self, '_radius_spin'):
-                d["border_radius"] = self._radius_spin.value()
-            if hasattr(self, '_opacity_spin'):
-                d["opacity"] = self._opacity_spin.value() / 100.0
-            if hasattr(self, '_shadow_combo'):
-                d["shadow"] = self._shadow_combo.currentText()
-
-        # 信息显示选项（schema 驱动）
-        self._collect_option_values(d)
-
-        return d
+    def _apply_realtime(self) -> None:
+        """全量应用（快捷方式编辑后调用）"""
+        if self.widget_info is None:
+            return
+        self._widget_model.save()
+        self._push_to_widget(self.widget_info.custom_settings or {})
 
     def _push_to_widget(self, settings: dict) -> None:
         """将设置推送到正在运行的桌面组件实例"""
@@ -431,90 +349,48 @@ class WidgetSettingsDialog(QDialog):
         except Exception:
             pass
 
-    # ── 颜色选择器 ────────────────────────────────────── #
+    # ------------------------------------------------------------------ #
+    # 恢复默认
+    # ------------------------------------------------------------------ #
 
-    def _pick_color(self) -> None:
-        initial = getattr(self, '_current_color', QColor("#FFFFFF"))
-        c = QColorDialog.getColor(initial, self, "选择文字颜色",
-                                   QColorDialog.ColorDialogOption.ShowAlphaChannel)
-        if c.isValid():
-            self._current_color = c
-            r, g, b, a = c.red(), c.green(), c.blue(), c.alpha()
-            self._color_preview.setStyleSheet(
-                f"background: rgba({r},{g},{b},{a}); "
-                f"border-radius: 4px; border:1px solid rgba(0,0,0,0.15);"
-            )
-            self._apply_realtime()
-
-    # ── 加载已有设置 ───────────────────────────────────── #
-
-    def _load_settings(self) -> None:
+    def _reset_defaults(self) -> None:
+        """把所有设置恢复为默认值（外观 + 信息显示）"""
         if self.widget_info is None:
             return
-        settings: dict[str, Any] = self.widget_info.custom_settings or {}
 
-        if self.widget_id == "clock":
-            # 显示秒数
-            if hasattr(self, '_show_seconds_combo'):
-                self._show_seconds_combo.setCurrentIndex(
-                    1 if settings.get("show_seconds", False) else 0
-                )
+        defaults: dict[str, Any] = {}
 
-            # 字体大小
-            if hasattr(self, '_font_size_slider'):
-                fs = settings.get("font_size", 52)
-                self._font_size_slider.setValue(max(16, min(120, int(fs))))
+        for key, (kind, card, default) in {
+            **self._appearance_controls,
+            **self._option_controls,
+        }.items():
+            defaults[key] = default
+            try:
+                if kind == "range":
+                    card.setValue(int(default))
+                elif kind == "switch":
+                    card.setChecked(bool(default))
+                elif kind == "options":
+                    card.setValue(default)
+                elif kind == "color":
+                    card.setColor(str(default))
+            except Exception:
+                pass
 
-            # 文字颜色
-            tc = settings.get("text_color")
-            if tc:
-                qc = QColor(tc)
-                if qc.isValid():
-                    self._current_color = qc
-                    r, g, b, a = qc.red(), qc.green(), qc.blue(), qc.alpha()
-                    self._color_preview.setStyleSheet(
-                        f"background: rgba({r},{g},{b},{a}); "
-                        f"border-radius: 4px; border:1px solid rgba(0,0,0,0.15);"
-                    )
+        self.widget_info.custom_settings = defaults
+        self._widget_model.save()
+        self._push_to_widget(defaults)
 
-            # 透明度（存储为 0-1 小数）
-            op = settings.get("opacity", 1.0)
-            self._opacity_spin.setValue(float(op) * 100)
-        else:
-            # 尺寸
-            if hasattr(self, '_size_combo'):
-                sm = {"small": "小", "medium": "中", "large": "大"}
-                ds = self.widget_info.size or "medium"
-                t = sm.get(settings.get("size", ds), "中")
-                idx = self._size_combo.findText(t)
-                if idx >= 0:
-                    self._size_combo.setCurrentIndex(idx)
+    # ------------------------------------------------------------------ #
+    # 兼容旧接口
+    # ------------------------------------------------------------------ #
 
-            # 圆角
-            if hasattr(self, '_radius_spin'):
-                self._radius_spin.setValue(settings.get("border_radius", 16))
+    def _pick_color(self) -> None:
+        if hasattr(self, "_color_card"):
+            self._color_card.pick()
 
-            # 透明度（存储为 0-1 小数，而非百分数）
-            if hasattr(self, '_opacity_spin'):
-                self._opacity_spin.setValue(float(settings.get("opacity", 0.95)) * 100)
-
-            # 阴影
-            if hasattr(self, '_shadow_combo'):
-                sh = settings.get("shadow", "轻微")
-                idx = self._shadow_combo.findText(sh)
-                if idx >= 0:
-                    self._shadow_combo.setCurrentIndex(idx)
-
-        # 信息显示选项回填
-        self._load_option_values(settings)
-
-        # 快捷方式
-        if self.widget_id == "shortcut" and hasattr(self, '_shortcut_layout'):
-            shortcuts = settings.get("shortcuts", [])
-            for s in shortcuts:
-                self._add_shortcut_row(s)
-
-    # ── 快捷方式行 ────────────────────────────────────── #
+    def _load_settings(self) -> None:
+        """兼容旧调用（设置已在构造时应用）"""
 
     def _add_shortcut_row(self, shortcut: Optional[dict] = None) -> None:
         if not hasattr(self, '_shortcut_layout'):
@@ -535,20 +411,6 @@ class WidgetSettingsDialog(QDialog):
         command_edit.setText(shortcut.get("command", "") if shortcut else "")
         row_layout.addWidget(command_edit, 1)
 
-        icon_combo = ComboBox()
-        icon_combo.addItems([
-            "APPLICATION", "BROWSER", "CALCULATOR", "CALENDAR",
-            "CHAT", "CODE", "COMMAND_PROMPT", "DOCUMENT",
-            "DOWNLOAD", "FOLDER", "GAME", "GLOBE",
-            "HELP", "HOME", "IMAGE", "MAIL",
-            "MEDIA", "MUSIC", "PHOTO", "PLAY",
-            "SEARCH", "SETTING", "SHARE", "SHOP",
-            "TAG", "VIDEO", "WORD", "ZIP",
-        ])
-        icon_combo.setCurrentText(shortcut.get("icon", "APPLICATION") if shortcut else "APPLICATION")
-        icon_combo.setFixedWidth(120)
-        row_layout.addWidget(icon_combo)
-
         remove_btn = ToolButton(FIF.DELETE)
         remove_btn.setFixedWidth(32)
         remove_btn.clicked.connect(lambda: self._remove_shortcut_row(row_widget))
@@ -560,10 +422,10 @@ class WidgetSettingsDialog(QDialog):
             "widget": row_widget,
             "name_edit": name_edit,
             "command_edit": command_edit,
-            "icon_combo": icon_combo,
         })
 
     def _remove_shortcut_row(self, row_widget: QWidget) -> None:
         self._shortcut_widgets = [r for r in self._shortcut_widgets if r["widget"] != row_widget]
         self._shortcut_layout.removeWidget(row_widget)
         row_widget.deleteLater()
+        self._apply_realtime()

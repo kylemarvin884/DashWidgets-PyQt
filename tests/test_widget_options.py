@@ -101,7 +101,7 @@ class TestWidgetOptionConsumption:
 
 
 class TestSettingsDialogOptions:
-    """设置对话框渲染信息显示区块并正确收集/回填"""
+    """设置对话框渲染信息显示区块并正确收集/回填（SettingCard 版）"""
 
     @pytest.fixture(scope="class", autouse=True)
     def _qapp(self):
@@ -134,20 +134,36 @@ class TestSettingsDialogOptions:
         # 渲染出了 schema 声明的 4 个开关
         assert set(dlg._option_controls) == {"show_cpu", "show_mem", "show_disk", "show_cpu_freq"}
 
-        # 切换开关 → 收集值进入 settings
+        # 切换开关 → 立即写入 settings（实时生效；未动过的键不写入，
+        # 由组件侧默认值兜底）
         dlg._option_controls["show_disk"][1].setChecked(False)
-        collected = dlg._collect_settings()
-        assert collected["show_disk"] is False
-        assert collected["show_cpu"] is True
+        assert dlg.widget_info.custom_settings.get("show_disk") is False
+        assert "show_cpu" not in dlg.widget_info.custom_settings
 
         # 回填：再次打开能恢复
         dlg2 = WidgetSettingsDialog("system_monitor")
-        info = dlg2.widget_info
-        info.custom_settings = dict(collected)
-        dlg2._load_settings()
         assert dlg2._option_controls["show_disk"][1].isChecked() is False
 
     def test_dialog_no_options_widget(self, _isolated_model):
         from app.widgets.widget_settings_dialog import WidgetSettingsDialog
         dlg = WidgetSettingsDialog("todo")
-        assert not hasattr(dlg, "_option_controls")
+        assert not dlg._option_controls
+
+    def test_dialog_range_and_reset(self, _isolated_model):
+        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+
+        dlg = WidgetSettingsDialog("rss")
+        dlg._option_controls["max_items"][1].setValue(9)
+        assert dlg.widget_info.custom_settings.get("max_items") == 9
+
+        # 恢复默认
+        dlg._reset_defaults()
+        assert dlg.widget_info.custom_settings.get("max_items") == 6
+        assert dlg.widget_info.custom_settings.get("show_source") is True
+
+    def test_dialog_clock_opacity_conversion(self, _isolated_model):
+        """时钟透明度卡片（百分比）→ 存储 0-1 小数"""
+        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        dlg = WidgetSettingsDialog("clock")
+        dlg._opacity_card.setValue(70)
+        assert abs(dlg.widget_info.custom_settings.get("opacity") - 0.70) < 0.001
