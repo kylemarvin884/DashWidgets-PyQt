@@ -796,11 +796,11 @@ class DesktopWidgetWindow(QWidget):
         self._apply_window_settings(settings)
 
     def _open_appearance_dialog(self) -> None:
-        """打开外观设置对话框"""
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        """打开组件设置窗口（FluentWindow）"""
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow
 
-        dialog = WidgetSettingsDialog(widget_id=self._info.id, parent=self)
-        dialog.exec()
+        window = WidgetSettingsWindow(widget_id=self._info.id)
+        window.show()
 
     def _apply_window_settings(self, settings: dict) -> None:
         """应用窗口级别的设置"""

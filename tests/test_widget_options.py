@@ -128,7 +128,7 @@ class TestSettingsDialogOptions:
         widget_model.WidgetModel._instance = None
 
     def test_dialog_renders_and_collects(self, _isolated_model):
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow as WidgetSettingsDialog
 
         dlg = WidgetSettingsDialog("system_monitor")
         # 渲染出了 schema 声明的 4 个开关
@@ -145,12 +145,12 @@ class TestSettingsDialogOptions:
         assert dlg2._option_controls["show_disk"][1].isChecked() is False
 
     def test_dialog_no_options_widget(self, _isolated_model):
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow as WidgetSettingsDialog
         dlg = WidgetSettingsDialog("todo")
         assert not dlg._option_controls
 
     def test_dialog_range_and_reset(self, _isolated_model):
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow as WidgetSettingsDialog
 
         dlg = WidgetSettingsDialog("rss")
         dlg._option_controls["max_items"][1].setValue(9)
@@ -163,7 +163,7 @@ class TestSettingsDialogOptions:
 
     def test_dialog_clock_opacity_conversion(self, _isolated_model):
         """时钟透明度卡片（百分比）→ 存储 0-1 小数"""
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow as WidgetSettingsDialog
         dlg = WidgetSettingsDialog("clock")
         dlg._opacity_card.setValue(70)
         assert abs(dlg.widget_info.custom_settings.get("opacity") - 0.70) < 0.001

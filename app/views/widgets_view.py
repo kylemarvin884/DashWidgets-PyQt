@@ -436,9 +436,9 @@ class WidgetsView(QFrame):
         logger.info(f"停用小组件: {widget_id}")
 
     def _on_widget_settings(self, widget_id: str) -> None:
-        """打开小组件设置"""
-        from app.widgets.widget_settings_dialog import WidgetSettingsDialog
+        """打开小组件设置（FluentWindow，独立窗口常驻）"""
+        from app.widgets.widget_settings_dialog import WidgetSettingsWindow
 
-        dialog = WidgetSettingsDialog(widget_id, self)
-        _ = dialog.exec()
+        window = WidgetSettingsWindow(widget_id)
+        window.show()
         logger.info(f"打开小组件设置: {widget_id}")

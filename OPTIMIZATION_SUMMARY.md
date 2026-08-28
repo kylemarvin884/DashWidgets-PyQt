@@ -3,6 +3,12 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **85 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第十三轮：组件设置升级为 FluentWindow 窗口（2026-08-29）
+
+- **从模态 QDialog 升级为 `FluentWindow`**（qfluentwidgets 官方推荐的多页面窗口形态）：左侧导航栏分区切换（外观 / 信息显示 / 快捷方式，无对应分区的组件自动隐藏该项），窗口自带云母材质与 Fluent 标题栏；导航栏底部放置「恢复默认」。
+- 分区子界面为透明背景 ScrollArea（`_SettingsPage`），云母透出；模态 `exec()` 改为独立 `show()`，设置时可实时观察桌面组件的变化。
+- 两个调用点（widgets_view 与桌面组件右键菜单）同步迁移；测试导入更新，85 passed。
+
 ## 第十二轮：组件设置对话框重写为原生 SettingCard（2026-08-29）
 
 - **推倒重写**：原来 569 行手写行布局（`标签: + 控件 + addStretch`）、"显示秒数"用是/否下拉、时钟/通用两套重复代码、无恢复默认。现在整体换为 qfluentwidgets 原生 **SettingCard 卡片**（图标 + 标题/描述 + 右侧控件），与主窗口设置页同一视觉语言：滑杆用 `RangeSettingCard`、布尔项用 `SwitchSettingCard`（原生开关替代是/否下拉）、多选项用 `OptionsSettingCard`、颜色用自绘 `_ColorSettingCard`（色块点击弹 QColorDialog）。
