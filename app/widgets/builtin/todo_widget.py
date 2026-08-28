@@ -36,7 +36,7 @@ class TodoWidget(WidgetBase):
         main_layout.setSpacing(2)
 
         self._title_label = QLabel("待办事项")
-        self._title_label.setFont(QFont("Segoe UI Variable", 11, QFont.Weight.Light))
+        self._title_label.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
         self._title_label.setStyleSheet(f"color: {c['title']}; background: transparent;")
         main_layout.addWidget(self._title_label)
 
@@ -60,7 +60,7 @@ class TodoWidget(WidgetBase):
 
         self._input = QLineEdit()
         self._input.setPlaceholderText("添加任务...")
-        self._input.setFont(QFont("Segoe UI Variable", 10))
+        self._input.setFont(Win11Style.widget_font(13))
         self._input.setStyleSheet(
             f"color: {c['text']}; background: {c['bg_input']};"
             f" border: 1px solid {c['border_input']}; border-radius: 6px; padding: 4px 8px;"
@@ -106,7 +106,7 @@ class TodoWidget(WidgetBase):
         row.addWidget(cb)
 
         label = QLabel(text)
-        label.setFont(QFont("Segoe UI Variable", 11))
+        label.setFont(Win11Style.widget_font(15))
         label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         row.addWidget(label)
         row.addStretch()

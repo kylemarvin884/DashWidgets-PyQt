@@ -103,20 +103,20 @@ class CountdownWidget(WidgetBase):
 
         self._title_label = QLabel(self._title)
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_label.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
+        self._title_label.setFont(Win11Style.widget_font(16, QFont.Weight.Light))
         self._title_label.setStyleSheet(f"color: {c['title']}; background: transparent;")
         main_layout.addWidget(self._title_label)
 
         self._days_label = QLabel("--")
         self._days_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._days_label.setFont(QFont("Segoe UI Variable", 30, QFont.Weight.ExtraLight))
+        self._days_label.setFont(Win11Style.widget_font(40, QFont.Weight.ExtraLight))
         self._days_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         main_layout.addWidget(self._days_label)
 
         self._date_label = QLabel("点击设置目标日期")
         self._date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._date_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._date_label.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Light))
+        self._date_label.setFont(Win11Style.widget_font(13, QFont.Weight.Light))
         self._date_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         main_layout.addWidget(self._date_label)
         main_layout.addStretch()

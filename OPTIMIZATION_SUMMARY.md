@@ -3,6 +3,12 @@
 本轮围绕功能、性能、稳定性、资源占用与插件系统做了一次全面优化。
 测试基线：`uv run pytest` → **83 passed**（优化前 17 个用例中 1 个失败）。
 
+## 第十一轮：字体统一（主页标题与全库 44 处手写字体）（2026-08-29）
+
+- **问题**：主页标题等用的 `QFont("Segoe UI Variable Display")` 在多数机器上不存在（`exactMatch()==False`），Qt 会静默替换成不可控的默认字体；而 qfluentwidgets 原生标签走 `qconfig.fontFamilies`（Segoe UI → Microsoft YaHei），两套字体栈并存导致主页字重、字形与周围标签不一致。
+- **修复**：`display_font/subtitle_font` 改为复用 qfluentwidgets 的字体栈（`qconfig.get(qconfig.fontFamilies)` + `setPixelSize`，与其 `getFont()` 同源）；新增 `widget_font(px, weight)`，批量替换 18 个组件文件里全部 44 处 `QFont("Segoe UI Variable", pt, ...)` 手写字体（pt→px 按 4/3 换算保持视觉大小）。
+- 验证：display/widget 字体 families 与 `BodyLabel().font().families()` 完全一致。
+
 ## 第十轮：云母真正打通（main.py 全局 QSS 是最后一块挡板）（2026-08-29）
 
 - **根因**：`main.py` 里还残留一整块应用级 Claude QSS——`QWidget { background-color: #faf9f5 }` 强制所有控件不透明米白，此前在 `app/` 目录搜索所以漏掉。删除该 QSS 块与「强制浅色主题」逻辑（主题交还 qfluentwidgets 默认 Auto）。

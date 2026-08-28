@@ -57,11 +57,11 @@ class _BatteryRing(QWidget):
 
             # 中心数字
             p.setPen(QColor(c["text"]))
-            p.setFont(QFont("Segoe UI Variable", 15, QFont.Weight.Light))
+            p.setFont(Win11Style.widget_font(20, QFont.Weight.Light))
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{int(pct)}%")
         else:
             p.setPen(QColor(c["text_secondary"]))
-            p.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Light))
+            p.setFont(Win11Style.widget_font(13, QFont.Weight.Light))
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, "无电池")
 
         # 充电闪电标记
@@ -108,7 +108,7 @@ class BatteryWidget(WidgetBase):
         row.setSpacing(6)
         row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label = QLabel("读取中…")
-        self._status_label.setFont(QFont("Segoe UI Variable", 10, QFont.Weight.Light))
+        self._status_label.setFont(Win11Style.widget_font(13, QFont.Weight.Light))
         self._status_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         row.addWidget(self._status_label)
         main_layout.addLayout(row)

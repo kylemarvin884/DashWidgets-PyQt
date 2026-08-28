@@ -46,7 +46,7 @@ class DocumentViewerWidget(WidgetBase):
         # 内建右键菜单会继承窗口透明样式渲染成黑底；禁用后右键
         # 传播到窗口统一菜单（全选/复制作为组件动作贡献）
         self._text_edit.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self._text_edit.setFont(QFont("Segoe UI Variable", 11))
+        self._text_edit.setFont(Win11Style.widget_font(15))
         self._text_edit.setStyleSheet(
             f"QTextEdit {{"
             f"  color: {c['text']};"

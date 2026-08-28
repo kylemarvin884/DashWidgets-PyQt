@@ -28,7 +28,7 @@ class NoteWidget(WidgetBase):
         main_layout.setSpacing(4)
 
         self._editor = QTextEdit(self)
-        self._editor.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
+        self._editor.setFont(Win11Style.widget_font(16, QFont.Weight.Light))
         self._editor.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._editor.setStyleSheet(
             f"color: {c['text']}; background: {c['bg_input']};"

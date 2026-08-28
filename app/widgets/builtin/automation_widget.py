@@ -28,13 +28,13 @@ class AutomationWidget(WidgetBase):
 
         self._count_label = QLabel("0")
         self._count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._count_label.setFont(QFont("Segoe UI Variable", 36, QFont.Weight.ExtraLight))
+        self._count_label.setFont(Win11Style.widget_font(48, QFont.Weight.ExtraLight))
         self._count_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         main_layout.addWidget(self._count_label)
 
         self._status_label = QLabel("就绪")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_label.setFont(QFont("Segoe UI Variable", 11, QFont.Weight.Light))
+        self._status_label.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
         self._status_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         main_layout.addWidget(self._status_label)
 

@@ -23,9 +23,9 @@ class _StatBar(QWidget):
         self.setFixedHeight(48)
         self.setStyleSheet("background: transparent;")
         # 字体只创建一次（paint 每次触发都新建 QFont 是无谓分配）
-        self._label_font = QFont("Segoe UI Variable", 10, QFont.Weight.Normal)
-        self._pct_font = QFont("Segoe UI Variable", 14, QFont.Weight.DemiBold)
-        self._sub_font = QFont("Segoe UI Variable", 8, QFont.Weight.Light)
+        self._label_font = Win11Style.widget_font(13, QFont.Weight.Normal)
+        self._pct_font = Win11Style.widget_font(19, QFont.Weight.DemiBold)
+        self._sub_font = Win11Style.widget_font(11, QFont.Weight.Light)
 
     def set_value(self, value: float, sub_text: str = "") -> None:
         self._value = max(0.0, min(1.0, value))

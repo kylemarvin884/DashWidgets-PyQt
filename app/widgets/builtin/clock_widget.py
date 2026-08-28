@@ -32,14 +32,14 @@ class ClockWidget(WidgetBase):
 
         self._time_label = QLabel("00:00")
         self._time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = QFont("Segoe UI Variable", 52, QFont.Weight.ExtraLight)
+        font = Win11Style.widget_font(69, QFont.Weight.ExtraLight)
         font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
         font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 104)
         self._time_label.setFont(font)
 
         self._date_label = QLabel("")
         self._date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        date_font = QFont("Segoe UI Variable", 11, QFont.Weight.Light)
+        date_font = Win11Style.widget_font(15, QFont.Weight.Light)
         date_font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 108)
         self._date_label.setFont(date_font)
 

@@ -29,14 +29,14 @@ class CalendarWidget(WidgetBase):
         title_row = QHBoxLayout()
         title_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._title_label = QLabel("")
-        self._title_label.setFont(QFont("Segoe UI Variable", 13, QFont.Weight.Light))
+        self._title_label.setFont(Win11Style.widget_font(17, QFont.Weight.Light))
         self._title_label.setStyleSheet(f"color: {c['title']}; background: transparent;")
         title_row.addWidget(self._title_label)
         main_layout.addLayout(title_row)
 
         header_grid = QGridLayout()
         header_grid.setSpacing(2)
-        hdr_font = QFont("Segoe UI Variable", 9, QFont.Weight.Normal)
+        hdr_font = Win11Style.widget_font(12, QFont.Weight.Normal)
         for col, wd in enumerate(self.WEEKDAYS_CN):
             lbl = QLabel(wd)
             lbl.setFont(hdr_font)
@@ -47,7 +47,7 @@ class CalendarWidget(WidgetBase):
 
         self._date_grid = QGridLayout()
         self._date_grid.setSpacing(3)
-        day_font = QFont("Segoe UI Variable", 11, QFont.Weight.ExtraLight)
+        day_font = Win11Style.widget_font(15, QFont.Weight.ExtraLight)
         for row in range(6):
             for col in range(7):
                 lbl = QLabel("")

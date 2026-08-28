@@ -67,7 +67,7 @@ class TimerRing(QWidget):
         self._phase = "work"
         self._running = False
         self.setStyleSheet("background: transparent;")
-        self._text_font = QFont("Segoe UI Variable", 16, QFont.Weight.Light)  # 只建一次
+        self._text_font = Win11Style.widget_font(21, QFont.Weight.Light)  # 只建一次
 
     def set_state(self, progress: float, text: str, phase: str, running: bool) -> None:
         self._progress = progress
@@ -256,14 +256,14 @@ class PomodoroWidget(WidgetBase):
         # 相位标签
         self._phase_label = QLabel("专注中")
         self._phase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._phase_label.setFont(QFont("Segoe UI Variable", 11, QFont.Weight.Light))
+        self._phase_label.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
         self._phase_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         main_layout.addWidget(self._phase_label)
 
         # 统计行
         self._stats_label = QLabel("")
         self._stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._stats_label.setFont(QFont("Segoe UI Variable", 9, QFont.Weight.Light))
+        self._stats_label.setFont(Win11Style.widget_font(12, QFont.Weight.Light))
         self._stats_label.setStyleSheet(f"color: {c['text_dim']}; background: transparent;")
         main_layout.addWidget(self._stats_label)
 

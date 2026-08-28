@@ -20,7 +20,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QFont, QAction, QCursor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath, QTransform
 
 from loguru import logger
-from qfluentwidgets import isDarkTheme
+from qfluentwidgets import isDarkTheme, qconfig
 
 from app.constants import BASE_DIR, WIDGET_CONFIG
 from app.models.widget_model import WidgetModel, WidgetInfo
@@ -266,21 +266,34 @@ class Win11Style:
 
     @classmethod
     def display_font(cls, size: int, semibold: bool = False) -> QFont:
-        """Fluent Display 字体（Segoe UI Variable Display，28px 用于页面标题）"""
-        f = QFont("Segoe UI Variable Display")
-        if not f.exactMatch():
-            f = QFont("Segoe UI Variable")
-        f.setPointSize(size)
+        """Fluent Display 字阶 — 与 qfluentwidgets 标签同一字体栈（config FontFamilies）
+
+        使用 pixelSize（Fluent 规范按像素），families 由 qconfig 提供，
+        与 BodyLabel/CaptionLabel 等原生标签完全一致，避免混排。
+        """
+        from qfluentwidgets import qconfig
+        f = QFont()
+        f.setFamilies(qconfig.get(qconfig.fontFamilies))
+        f.setPixelSize(size)
         f.setWeight(QFont.Weight.DemiBold if semibold else QFont.Weight.Normal)
-        f.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 98)
         return f
 
     @classmethod
     def subtitle_font(cls, size: int = 20) -> QFont:
-        """Fluent Subtitle（20px Semibold，分区标题）"""
-        f = QFont(cls.FONT_SANS)
-        f.setPointSize(size)
-        f.setWeight(QFont.Weight.DemiBold)
+        """Fluent Subtitle（20px Semibold，分区标题）— 同一字体栈"""
+        return cls.display_font(size, semibold=True)
+
+    @classmethod
+    def widget_font(cls, size: int, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
+        """桌面小组件字体 — 应用字体栈（HarmonyOS Sans/Segoe UI/YaHei）+ 像素字号
+
+        替代手写的 QFont("Segoe UI Variable", pointSize, ...)（该字体多数
+        机器未安装，会被静默替换成不可控的默认字体）。size 为像素值。
+        """
+        f = QFont()
+        f.setFamilies(qconfig.get(qconfig.fontFamilies))
+        f.setPixelSize(size)
+        f.setWeight(weight)
         return f
 
     @classmethod

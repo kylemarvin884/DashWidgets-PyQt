@@ -136,17 +136,17 @@ class WeatherWidget(WidgetBase):
         info_col.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self._desc_label = QLabel("晴")
-        self._desc_label.setFont(QFont("Segoe UI Variable", 16, QFont.Weight.Light))
+        self._desc_label.setFont(Win11Style.widget_font(21, QFont.Weight.Light))
         self._desc_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         info_col.addWidget(self._desc_label)
 
         self._temp_label = QLabel("22℃")
-        self._temp_label.setFont(QFont("Segoe UI Variable", 13, QFont.Weight.ExtraLight))
+        self._temp_label.setFont(Win11Style.widget_font(17, QFont.Weight.ExtraLight))
         self._temp_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         info_col.addWidget(self._temp_label)
 
         self._detail_label = QLabel("湿度 -- · 风 --")
-        self._detail_label.setFont(QFont("Segoe UI Variable", 9, QFont.Weight.Light))
+        self._detail_label.setFont(Win11Style.widget_font(12, QFont.Weight.Light))
         self._detail_label.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
         info_col.addWidget(self._detail_label)
 

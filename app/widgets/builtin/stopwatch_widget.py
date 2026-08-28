@@ -30,7 +30,7 @@ class StopwatchWidget(WidgetBase):
 
         self._time_label = QLabel("00:00.00")
         self._time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._time_label.setFont(QFont("Segoe UI Variable", 28, QFont.Weight.ExtraLight))
+        self._time_label.setFont(Win11Style.widget_font(37, QFont.Weight.ExtraLight))
         self._time_label.setStyleSheet(f"color: {c['text']}; background: transparent;")
         main_layout.addWidget(self._time_label)
 

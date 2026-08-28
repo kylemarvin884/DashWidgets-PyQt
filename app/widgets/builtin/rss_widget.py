@@ -25,14 +25,14 @@ class _ItemRow(QWidget):
 
         c = Win11Style.widget_colors()
         self._title_lbl = QLabel(title)
-        self._title_lbl.setFont(QFont("Segoe UI Variable", 11, QFont.Weight.Light))
+        self._title_lbl.setFont(Win11Style.widget_font(15, QFont.Weight.Light))
         self._title_lbl.setStyleSheet(f"color: {c['text']}; background: transparent;")
         self._title_lbl.setWordWrap(True)
         lay.addWidget(self._title_lbl)
 
         if show_source and source:
             src_lbl = QLabel(source)
-            src_lbl.setFont(QFont("Segoe UI Variable", 9, QFont.Weight.Light))
+            src_lbl.setFont(Win11Style.widget_font(12, QFont.Weight.Light))
             src_lbl.setStyleSheet(f"color: {c['text_secondary']}; background: transparent;")
             lay.addWidget(src_lbl)
 

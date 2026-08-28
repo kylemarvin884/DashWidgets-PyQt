@@ -23,9 +23,9 @@ class SpeedIndicator(QWidget):
         self.setFixedHeight(40)
         self.setStyleSheet("background: transparent;")
         # 字体/路径只建一次，避免每次 paint 重复分配
-        self._label_font = QFont("Segoe UI Variable", 9, QFont.Weight.Normal)
-        self._speed_font = QFont("Segoe UI Variable", 14, QFont.Weight.Light)
-        self._unit_font = QFont("Segoe UI Variable", 9, QFont.Weight.Light)
+        self._label_font = Win11Style.widget_font(12, QFont.Weight.Normal)
+        self._speed_font = Win11Style.widget_font(19, QFont.Weight.Light)
+        self._unit_font = Win11Style.widget_font(12, QFont.Weight.Light)
 
         self._up_tri = QPainterPath()
         self._up_tri.moveTo(-4, 3)
@@ -135,7 +135,7 @@ class NetworkMonitorWidget(WidgetBase):
         main_layout.addWidget(sep)
         self._separator = sep
 
-        total_font = QFont("Segoe UI Variable", 10, QFont.Weight.ExtraLight)
+        total_font = Win11Style.widget_font(13, QFont.Weight.ExtraLight)
         up_total_row = QHBoxLayout()
         self._up_total_label = QLabel("↑ 总计: --")
         self._up_total_label.setFont(total_font)

@@ -71,7 +71,7 @@ class ImageWidget(WidgetBase):
         if not self._image_path or not Path(self._image_path).is_file():
             self._label.clear()
             self._label.setText("点击选择图片")
-            self._label.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
+            self._label.setFont(Win11Style.widget_font(16, QFont.Weight.Light))
             self._original_pixmap = None
             return
 
@@ -79,7 +79,7 @@ class ImageWidget(WidgetBase):
         if pm is None:
             self._label.clear()
             self._label.setText("加载失败")
-            self._label.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
+            self._label.setFont(Win11Style.widget_font(16, QFont.Weight.Light))
             self._original_pixmap = None
             return
 
@@ -131,7 +131,7 @@ class ImageWidget(WidgetBase):
         self._original_pixmap = None
         self._label.clear()
         self._label.setText("点击选择图片")
-        self._label.setFont(QFont("Segoe UI Variable", 12, QFont.Weight.Light))
+        self._label.setFont(Win11Style.widget_font(16, QFont.Weight.Light))
         self._label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._label.setStyleSheet(
             f"color: {c['text_dim']}; background: {c['bg_input']};"
